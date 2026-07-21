@@ -46,9 +46,68 @@ function optionRow({ title, hint, checked, onChange, body }) {
   return { row, check, bodyWrap }
 }
 
+function topBar(lang, onLang, extraStart) {
+  return el('div', { className: 'topbar' }, [
+    extraStart || el('div', { className: 'topbar-spacer' }),
+    langSwitch(lang, onLang),
+  ])
+}
+
+function showResultPage(root, { siteName, url, keyInUrl, lang, onLang, onAgain }) {
+  const i = t(lang)
+
+  const copyBtn = el('button', {
+    type: 'button',
+    className: 'btn primary',
+    text: i.copyLink,
+    onClick: async (e) => {
+      const ok = await copyText(url)
+      e.target.textContent = ok ? i.copied : i.copyFail
+      setTimeout(() => {
+        e.target.textContent = i.copyLink
+      }, 1600)
+    },
+  })
+
+  const again = el('button', {
+    type: 'button',
+    className: 'btn ghost',
+    text: i.another,
+    onClick: onAgain,
+  })
+
+  const panel = el('section', { className: 'panel result-panel' }, [
+    el('div', { className: 'success-mark', text: '✓' }),
+    el('h1', { className: 'panel-title', text: i.ready }),
+    el('input', { className: 'field mono result-url', readonly: true, value: url }),
+    copyBtn,
+    again,
+    el('p', { className: 'hint', text: keyInUrl ? i.hintHash : i.hintPass }),
+  ])
+
+  const brand = el('header', { className: 'brand compact' }, [
+    el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
+  ])
+
+  root.replaceChildren(
+    el('div', { className: 'shell narrow page-slide' }, [
+      topBar(lang, onLang, el('a', { href: '/', className: 'back-link', text: '← NeoPaste' })),
+      brand,
+      panel,
+    ]),
+  )
+  animateIn(panel)
+}
+
 export function renderHome(root, { siteName }) {
   let lang = getLang()
   setLang(lang)
+
+  const changeLang = (next) => {
+    lang = next
+    setLang(lang)
+    mount()
+  }
 
   const mount = () => {
     const i = t(lang)
@@ -57,15 +116,6 @@ export function renderHome(root, { siteName }) {
     let selected = EXPIRY[2].sec
     let burn = false
     let busy = false
-
-    const topbar = el('div', { className: 'topbar' }, [
-      el('div', { className: 'topbar-spacer' }),
-      langSwitch(lang, (next) => {
-        lang = next
-        setLang(lang)
-        mount()
-      }),
-    ])
 
     const brand = el('header', { className: 'brand' }, [
       el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
@@ -131,7 +181,6 @@ export function renderHome(root, { siteName }) {
     })
 
     const status = el('p', { className: 'status', hidden: true })
-    const result = el('div', { className: 'result', hidden: true })
 
     const submit = el('button', {
       type: 'button',
@@ -140,7 +189,6 @@ export function renderHome(root, { siteName }) {
       onClick: async () => {
         if (busy) return
         status.hidden = true
-        result.hidden = true
         const text = content.value.trim()
         if (!text) {
           showStatus(status, i.needContent, true)
@@ -176,32 +224,31 @@ export function renderHome(root, { siteName }) {
           let url = `${location.origin}${data.url}`
           if (keyInUrl) url += `#${encodeURIComponent(pass)}`
 
-          result.hidden = false
-          result.replaceChildren(
-            el('p', { className: 'result-label', text: i.ready }),
-            el('div', { className: 'result-row' }, [
-              el('input', { className: 'field mono', readonly: true, value: url }),
-              el('button', {
-                type: 'button',
-                className: 'btn ghost',
-                text: i.copy,
-                onClick: async (e) => {
-                  const ok = await copyText(url)
-                  e.target.textContent = ok ? i.copied : i.copyFail
-                  setTimeout(() => {
-                    e.target.textContent = i.copy
-                  }, 1600)
-                },
-              }),
-            ]),
-            el('p', { className: 'hint', text: keyInUrl ? i.hintHash : i.hintPass }),
-          )
-          animateIn(result)
-          content.value = ''
-          password.value = ''
+          // Animate form out, then show result page
+          const shell = root.querySelector('.shell')
+          if (shell) {
+            shell.classList.add('page-out')
+            await new Promise((r) => setTimeout(r, 280))
+          }
+
+          showResultPage(root, {
+            siteName,
+            url,
+            keyInUrl,
+            lang,
+            onLang: changeLang,
+            onAgain: () => {
+              const s = root.querySelector('.shell')
+              if (s) {
+                s.classList.add('page-out')
+                setTimeout(() => mount(), 250)
+              } else {
+                mount()
+              }
+            },
+          })
         } catch (err) {
           showStatus(status, err.message || i.createError, true)
-        } finally {
           busy = false
           submit.disabled = false
           submit.textContent = i.create
@@ -214,14 +261,15 @@ export function renderHome(root, { siteName }) {
       el('div', { className: 'options' }, [passOpt.row, expiryOpt.row, burnOpt.row]),
       submit,
       status,
-      result,
     ])
 
     const footer = el('footer', { className: 'footer' }, [
       el('a', { href: '/admin', className: 'footer-link', text: i.adminLink }),
     ])
 
-    root.replaceChildren(el('div', { className: 'shell' }, [topbar, brand, form, footer]))
+    root.replaceChildren(
+      el('div', { className: 'shell page-slide' }, [topBar(lang, changeLang), brand, form, footer]),
+    )
     animateIn(form)
   }
 

@@ -45,6 +45,11 @@ export function el(tag, props = {}, children = []) {
   return node
 }
 
+/** Like replaceChildren, but skips null/false (DOM would otherwise render "null"). */
+export function setChildren(node, ...children) {
+  node.replaceChildren(...children.filter((c) => c != null && c !== false))
+}
+
 export async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text)

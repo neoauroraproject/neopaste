@@ -1,4 +1,4 @@
-import { api, el, copyText, animateIn } from './util.js'
+import { api, el, copyText, animateIn, setChildren } from './util.js'
 import { decryptPaste, passwordVerify } from './crypto.js'
 import { getLang, setLang, t } from './i18n.js'
 import { langSwitch } from './langswitch.js'
@@ -151,7 +151,8 @@ function showContent(panel, plain, meta, lang) {
     },
   })
 
-  panel.replaceChildren(
+  setChildren(
+    panel,
     el('h1', { className: 'panel-title', text: i.content }),
     el('div', { className: 'content-card' }, [body]),
     copyBtn,
