@@ -3,6 +3,18 @@ import { encryptPaste, randomPassphrase } from './crypto.js'
 import { getLang, setLang, t } from './i18n.js'
 import { langSwitch } from './langswitch.js'
 
+const EXPIRY = [
+  { key: '30m', sec: 30 * 60 },
+  { key: '1h', sec: 60 * 60 },
+  { key: '3h', sec: 3 * 60 * 60 },
+  { key: '12h', sec: 12 * 60 * 60 },
+  { key: '1d', sec: 24 * 60 * 60 },
+  { key: '3d', sec: 3 * 24 * 60 * 60 },
+  { key: '7d', sec: 7 * 24 * 60 * 60 },
+  { key: '10d', sec: 10 * 24 * 60 * 60 },
+  { key: '30d', sec: 30 * 24 * 60 * 60 },
+]
+
 function optionRow({ title, hint, checked, onChange, body }) {
   const check = el('input', { type: 'checkbox', className: 'opt-check' })
   check.checked = !!checked
