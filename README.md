@@ -81,7 +81,8 @@ curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scri
 
 ### نصب آفلاین
 
-دانلود بسته از Releases روی سیستم دارای نت → کپی به سرور → `sudo bash install.sh` (منوی آپدیت/نصب/حذف).
+دانلود بسته از Releases روی سیستم دارای نت → کپی به سرور → `tar -xzf neopaste-linux-amd64.tar.gz && cd neopaste && sudo bash install.sh
+` (منوی آپدیت/نصب/حذف).
 
 ---
 
