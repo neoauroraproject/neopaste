@@ -99,8 +99,13 @@ export function securityOptions(lang, state) {
     },
   })
 
+  const body = el('div', { className: 'options' }, [passOpt.row, expiryOpt.row, burnOpt.row])
+  const fold = el('details', { className: 'options-fold' }, [
+    el('summary', { className: 'options-summary', text: i.securityOpts }),
+    body,
+  ])
   return {
-    node: el('div', { className: 'options' }, [passOpt.row, expiryOpt.row, burnOpt.row]),
+    node: fold,
     password,
     state,
   }

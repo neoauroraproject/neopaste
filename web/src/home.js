@@ -27,6 +27,7 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
   setLang(lang)
   let mode = 'paste'
   let pasteHandler = null
+  let showTemplates = false
 
   const onLang = (next) => {
     lang = next
@@ -44,19 +45,16 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
     const sec = securityOptions(lang, state)
     const status = el('p', { className: 'status', hidden: true })
 
-    const tabs = el('div', { className: 'mode-tabs' }, [
-      tabBtn(i.tabPaste, 'paste'),
-      tabBtn(i.tabCode, 'code'),
-      tabBtn(i.tabImage, 'image'),
-      toolsEnabled
-        ? el('a', { href: '/tools', className: 'mode-tab linkish', text: i.tabTools })
-        : null,
-    ].filter(Boolean))
+    const tabs = el('div', { className: 'seg mode-seg' }, [
+      segBtn(i.tabPaste, 'paste'),
+      segBtn(i.tabCode, 'code'),
+      segBtn(i.tabImage, 'image'),
+    ])
 
-    function tabBtn(label, id) {
+    function segBtn(label, id) {
       return el('button', {
         type: 'button',
-        className: 'mode-tab' + (mode === id ? ' active' : ''),
+        className: 'seg-btn' + (mode === id ? ' active' : ''),
         text: label,
         onClick: () => {
           mode = id
@@ -67,24 +65,24 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
 
     const content = el('textarea', {
       className: 'paste-input',
-      placeholder: i.placeholder,
-      rows: '7',
+      placeholder: mode === 'code' ? '// code…' : i.placeholder,
+      rows: mode === 'code' ? '9' : '6',
       spellcheck: 'false',
     })
 
     const langSelect = el(
       'select',
-      { className: 'field' },
+      { className: 'field field-compact' },
       CODE_LANGS.map((l) => el('option', { value: l.id, text: l.label })),
     )
 
     const tplRow = el(
       'div',
-      { className: 'tpl-row' },
+      { className: 'tpl-row', hidden: !showTemplates },
       TEMPLATES.map((tpl) =>
         el('button', {
           type: 'button',
-          className: 'chip',
+          className: 'chip quiet',
           text: lang === 'fa' ? tpl.labelFa : tpl.labelEn,
           onClick: () => {
             content.value = tpl.body
@@ -94,18 +92,35 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
       ),
     )
 
+    const tplToggle = el('button', {
+      type: 'button',
+      className: 'linkish-btn',
+      text: showTemplates ? i.hideTemplates : i.templates,
+      onClick: () => {
+        showTemplates = !showTemplates
+        tplRow.hidden = !showTemplates
+        tplToggle.textContent = showTemplates ? i.hideTemplates : i.templates
+      },
+    })
+
     const imgPreview = el('img', { className: 'img-preview', hidden: true, alt: '' })
     const imgMeta = el('p', { className: 'hint', hidden: true })
     let imagePayload = null
 
     const fileInput = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', hidden: true })
-    const pickBtn = el('button', {
-      type: 'button',
-      className: 'btn ghost',
-      text: i.pickImage,
-      onClick: () => fileInput.click(),
-    })
-    const drop = el('div', { className: 'dropzone', text: i.dropImage })
+    const drop = el('div', { className: 'dropzone' }, [
+      el('span', { text: i.dropImage }),
+      el('button', {
+        type: 'button',
+        className: 'btn ghost mini',
+        text: i.pickImage,
+        onClick: (e) => {
+          e.stopPropagation()
+          fileInput.click()
+        },
+      }),
+    ])
+    drop.addEventListener('click', () => fileInput.click())
     drop.addEventListener('dragover', (e) => {
       e.preventDefault()
       drop.classList.add('over')
@@ -130,6 +145,7 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
       }
     }
     document.addEventListener('paste', pasteHandler)
+
     async function loadImage(file) {
       status.hidden = true
       status.classList.remove('error')
@@ -149,6 +165,7 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
       }
     }
 
+    let busy = false
     const submit = el('button', {
       type: 'button',
       className: 'btn primary',
@@ -226,28 +243,20 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
       },
     })
 
-    let busy = false
+    let composeBody
+    if (mode === 'image') {
+      composeBody = el('div', { className: 'compose-body' }, [drop, fileInput, imgPreview, imgMeta])
+    } else if (mode === 'code') {
+      composeBody = el('div', { className: 'compose-body' }, [langSelect, content])
+    } else {
+      composeBody = el('div', { className: 'compose-body' }, [
+        el('div', { className: 'compose-meta' }, [tplToggle]),
+        tplRow,
+        content,
+      ])
+    }
 
-    const composeBody =
-      mode === 'image'
-        ? el('div', { className: 'compose-body' }, [drop, pickBtn, fileInput, imgPreview, imgMeta])
-        : mode === 'code'
-          ? el('div', { className: 'compose-body' }, [
-              el('label', { className: 'field-label', text: i.language }),
-              langSelect,
-              content,
-            ])
-          : el('div', { className: 'compose-body' }, [
-              el('label', { className: 'field-label', text: i.templates }),
-              tplRow,
-              content,
-            ])
-
-    // restore mode UI correctly after draft remount
-    if (mode === 'code') content.placeholder = '// code…'
-    if (mode === 'paste') content.placeholder = i.placeholder
-
-    const form = el('section', { className: 'panel create-panel' }, [
+    const form = el('section', { className: 'panel create-panel clean' }, [
       tabs,
       composeBody,
       sec.node,
@@ -257,18 +266,23 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
 
     const historySection = await buildHistory(lang, i)
 
+    const navBits = []
+    if (toolsEnabled) {
+      navBits.push(el('a', { href: '/tools', className: 'footer-link', text: i.tabTools }))
+      navBits.push(el('span', { className: 'dot', text: '·' }))
+    }
+    navBits.push(el('a', { href: '/admin', className: 'footer-link', text: i.adminLink }))
+
     root.replaceChildren(
-      el('div', { className: 'shell page-slide' }, [
+      el('div', { className: 'shell narrow page-slide home-shell' }, [
         topBar(lang, onLang),
         el('header', { className: 'brand' }, [
           el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
-          el('p', { className: 'brand-tag', text: i.tagline }),
+          el('p', { className: 'brand-tag soft', text: i.taglineShort }),
         ]),
         form,
         historySection,
-        el('footer', { className: 'footer' }, [
-          el('a', { href: '/admin', className: 'footer-link', text: i.adminLink }),
-        ]),
+        el('footer', { className: 'footer' }, navBits),
       ]),
     )
     animateIn(form)
@@ -278,6 +292,7 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
 }
 
 async function buildHistory(lang, i) {
+  const section = el('section', { className: 'history-section quiet', hidden: true })
   const list = el('div', { className: 'history-list' })
   const clearBtnSlot = el('div', { className: 'history-clear-slot' })
 
@@ -285,13 +300,14 @@ async function buildHistory(lang, i) {
     list.replaceChildren()
     clearBtnSlot.replaceChildren()
     if (!items.length) {
-      list.append(el('p', { className: 'hint', text: i.emptyRecent }))
+      section.hidden = true
       return
     }
+    section.hidden = false
     clearBtnSlot.append(
       el('button', {
         type: 'button',
-        className: 'btn ghost mini',
+        className: 'linkish-btn',
         text: i.clearRecent,
         onClick: () => {
           clearHistory()
@@ -299,14 +315,13 @@ async function buildHistory(lang, i) {
         },
       }),
     )
-    for (const item of items.slice(0, 12)) {
-      const statusLabel =
-        item.status === 'gone' ? i.gone : item.status === 'alive' ? i.alive : ''
-      const card = el('div', { className: 'history-card' + (item.status === 'gone' ? ' gone' : '') }, [
+    for (const item of items.slice(0, 6)) {
+      const gone = item.status === 'gone'
+      const card = el('div', { className: 'history-card slim' + (gone ? ' gone' : '') }, [
         el('div', { className: 'history-main' }, [
           el('span', { className: 'history-kind', text: item.kind || 'text' }),
           el('span', { className: 'history-label', text: item.label || item.id }),
-          statusLabel ? el('span', { className: 'history-status', text: statusLabel }) : null,
+          gone ? el('span', { className: 'history-status', text: i.gone }) : null,
         ]),
         el('div', { className: 'history-actions' }, [
           el('button', {
@@ -336,7 +351,8 @@ async function buildHistory(lang, i) {
           el('button', {
             type: 'button',
             className: 'btn ghost mini danger',
-            text: i.remove,
+            text: '×',
+            title: i.remove,
             onClick: () => {
               removeHistory(item.id)
               paint(listHistory())
@@ -351,14 +367,15 @@ async function buildHistory(lang, i) {
   paint(listHistory())
   refreshHistoryStatuses().then((items) => paint(items))
 
-  return el('section', { className: 'history-section' }, [
+  section.append(
     el('div', { className: 'history-head' }, [
-      el('h2', { className: 'section-title', text: i.recent }),
+      el('h2', { className: 'section-title quiet', text: i.recent }),
       clearBtnSlot,
     ]),
-    el('p', { className: 'hint', text: i.recentHint }),
+    el('p', { className: 'hint tiny', text: i.recentHint }),
     list,
-  ])
+  )
+  return section
 }
 
 function showStatus(node, msg, isError) {
@@ -367,5 +384,4 @@ function showStatus(node, msg, isError) {
   node.classList.toggle('error', !!isError)
 }
 
-// re-export for main
 export { renderTools }

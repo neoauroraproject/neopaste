@@ -13,48 +13,6 @@ function fromHex(hex) {
   return new TextDecoder().decode(hexToBytes(clean))
 }
 
-function toolCard(title, body) {
-  return el('div', { className: 'tool-card' }, [
-    el('h3', { className: 'tool-title', text: title }),
-    body,
-  ])
-}
-
-function ioBox(lang, { placeholder, onRun, runLabel }) {
-  const i = t(lang)
-  const input = el('textarea', { className: 'paste-input tool-io', rows: '5', placeholder })
-  const output = el('textarea', { className: 'paste-input tool-io', rows: '5', readonly: true, placeholder: i.output })
-  const status = el('p', { className: 'status', hidden: true })
-  const run = el('button', {
-    type: 'button',
-    className: 'btn primary',
-    text: runLabel,
-    onClick: () => {
-      status.hidden = true
-      try {
-        output.value = onRun(input.value)
-      } catch (err) {
-        status.hidden = false
-        status.classList.add('error')
-        status.textContent = err.message || i.createError
-      }
-    },
-  })
-  const copy = el('button', {
-    type: 'button',
-    className: 'btn ghost',
-    text: i.copy,
-    onClick: async (e) => {
-      const ok = await copyText(output.value)
-      e.target.textContent = ok ? i.copied : i.copyFail
-      setTimeout(() => {
-        e.target.textContent = i.copy
-      }, 1200)
-    },
-  })
-  return { node: el('div', { className: 'tool-stack' }, [input, el('div', { className: 'btn-row' }, [run, copy]), output, status]), input, output }
-}
-
 function b64encode(str) {
   return btoa(unescape(encodeURIComponent(str)))
 }
@@ -89,6 +47,77 @@ function simpleDiff(a, b) {
   return out.join('\n')
 }
 
+function segment(items, activeId, onPick) {
+  return el(
+    'div',
+    { className: 'seg' },
+    items.map((it) =>
+      el('button', {
+        type: 'button',
+        className: 'seg-btn' + (it.id === activeId ? ' active' : ''),
+        text: it.label,
+        onClick: () => onPick(it.id),
+      }),
+    ),
+  )
+}
+
+function workspace(lang, { runLabel, onRun, placeholder, lastOutRef }) {
+  const i = t(lang)
+  const input = el('textarea', {
+    className: 'paste-input tool-io',
+    rows: '6',
+    placeholder: placeholder || i.toolInput,
+  })
+  const output = el('textarea', {
+    className: 'paste-input tool-io',
+    rows: '6',
+    readonly: true,
+    placeholder: i.output,
+  })
+  const status = el('p', { className: 'status', hidden: true })
+
+  const run = () => {
+    status.hidden = true
+    try {
+      output.value = onRun(input.value)
+      if (lastOutRef) lastOutRef.value = output.value
+    } catch (err) {
+      status.hidden = false
+      status.classList.add('error')
+      status.textContent = err.message || i.createError
+    }
+  }
+
+  const runBtn = el('button', { type: 'button', className: 'btn primary', text: runLabel, onClick: run })
+  const copyBtn = el('button', {
+    type: 'button',
+    className: 'btn ghost',
+    text: i.copy,
+    onClick: async (e) => {
+      const ok = await copyText(output.value)
+      e.target.textContent = ok ? i.copied : i.copyFail
+      setTimeout(() => {
+        e.target.textContent = i.copy
+      }, 1200)
+    },
+  })
+
+  return {
+    node: el('div', { className: 'tool-workspace' }, [
+      input,
+      el('div', { className: 'btn-row' }, [runBtn, copyBtn]),
+      output,
+      status,
+    ]),
+    getOutput: () => output.value,
+    setOutput: (v) => {
+      output.value = v
+      if (lastOutRef) lastOutRef.value = v
+    },
+  }
+}
+
 export function renderTools(root, { siteName, lang, onLang, toolsEnabled }) {
   const i = t(lang)
   if (!toolsEnabled) {
@@ -101,93 +130,272 @@ export function renderTools(root, { siteName, lang, onLang, toolsEnabled }) {
     return
   }
 
+  let tab = 'encode'
+  const lastOut = { value: '' }
   const shareState = { usePassword: true, useExpiry: true, expiresIn: EXPIRY[2].sec, burn: false }
-  const sec = securityOptions(lang, shareState)
-  const shareStatus = el('p', { className: 'status', hidden: true })
 
-  const boxes = {
-    b64e: ioBox(lang, { placeholder: i.toolInput, runLabel: 'Base64 ↑', onRun: b64encode }),
-    b64d: ioBox(lang, { placeholder: 'Base64…', runLabel: 'Base64 ↓', onRun: b64decode }),
-    urle: ioBox(lang, { placeholder: i.toolInput, runLabel: 'URL ↑', onRun: (s) => encodeURIComponent(s) }),
-    urld: ioBox(lang, { placeholder: 'URL encoded…', runLabel: 'URL ↓', onRun: (s) => decodeURIComponent(s) }),
-    sha: ioBox(lang, {
-      placeholder: i.toolInput,
-      runLabel: 'SHA-256',
-      onRun: (s) => bytesToHex(sha256(new TextEncoder().encode(s))),
-    }),
-    sha512: ioBox(lang, {
-      placeholder: i.toolInput,
-      runLabel: 'SHA-512',
-      onRun: (s) => bytesToHex(sha512(new TextEncoder().encode(s))),
-    }),
-    jwt: ioBox(lang, { placeholder: 'eyJhbGciOi…', runLabel: 'JWT decode', onRun: decodeJwt }),
-    json: ioBox(lang, {
-      placeholder: '{…}',
-      runLabel: i.formatJson,
-      onRun: (s) => JSON.stringify(JSON.parse(s), null, 2),
-    }),
-    minify: ioBox(lang, {
-      placeholder: '{…}',
-      runLabel: i.minifyJson,
-      onRun: (s) => JSON.stringify(JSON.parse(s)),
-    }),
-    hexe: ioBox(lang, { placeholder: i.toolInput, runLabel: 'Hex ↑', onRun: toHex }),
-    hexd: ioBox(lang, { placeholder: '68656c6c6f…', runLabel: 'Hex ↓', onRun: fromHex }),
+  const panel = el('section', { className: 'panel tools-panel' })
+  const mount = () => {
+    const tabs = segment(
+      [
+        { id: 'encode', label: i.toolsTabEncode },
+        { id: 'hash', label: i.toolsTabHash },
+        { id: 'data', label: i.toolsTabData },
+        { id: 'generate', label: i.toolsTabGen },
+        { id: 'diff', label: i.toolsTabDiff },
+        { id: 'share', label: i.toolsTabShare },
+      ],
+      tab,
+      (id) => {
+        tab = id
+        mount()
+      },
+    )
+
+    let body
+    if (tab === 'encode') body = encodePane(lang, i, lastOut)
+    else if (tab === 'hash') body = hashPane(lang, i, lastOut)
+    else if (tab === 'data') body = dataPane(lang, i, lastOut)
+    else if (tab === 'generate') body = generatePane(lang, i, lastOut)
+    else if (tab === 'diff') body = diffPane(lang, i, lastOut)
+    else body = sharePane(root, { siteName, lang, onLang, toolsEnabled, i, shareState, lastOut })
+
+    panel.replaceChildren(tabs, body)
   }
 
-  const uuidOut = el('input', { className: 'field mono', readonly: true, value: '' })
-  const genUuid = el('button', {
+  mount()
+
+  root.replaceChildren(
+    el('div', { className: 'shell narrow page-slide' }, [
+      topBar(lang, onLang, el('a', { href: '/', className: 'back-link', text: '← NeoPaste' })),
+      el('header', { className: 'brand compact' }, [
+        el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
+        el('p', { className: 'brand-tag soft', text: i.toolsTitleShort }),
+      ]),
+      panel,
+    ]),
+  )
+}
+
+function encodePane(lang, i, lastOut) {
+  let kind = 'b64'
+  let dir = 'enc'
+  const wrap = el('div', { className: 'tool-pane' })
+
+  const paint = () => {
+    const ops = {
+      b64: { enc: b64encode, dec: b64decode, runEnc: 'Base64 ↑', runDec: 'Base64 ↓' },
+      url: {
+        enc: (s) => encodeURIComponent(s),
+        dec: (s) => decodeURIComponent(s),
+        runEnc: 'URL ↑',
+        runDec: 'URL ↓',
+      },
+      hex: { enc: toHex, dec: fromHex, runEnc: 'Hex ↑', runDec: 'Hex ↓' },
+    }
+    const op = ops[kind]
+    const fn = dir === 'enc' ? op.enc : op.dec
+    const label = dir === 'enc' ? op.runEnc : op.runDec
+    const ws = workspace(lang, { runLabel: label, onRun: fn, lastOutRef: lastOut })
+    wrap.replaceChildren(
+      segment(
+        [
+          { id: 'b64', label: 'Base64' },
+          { id: 'url', label: 'URL' },
+          { id: 'hex', label: 'Hex' },
+        ],
+        kind,
+        (id) => {
+          kind = id
+          paint()
+        },
+      ),
+      segment(
+        [
+          { id: 'enc', label: i.encode },
+          { id: 'dec', label: i.decode },
+        ],
+        dir,
+        (id) => {
+          dir = id
+          paint()
+        },
+      ),
+      ws.node,
+    )
+  }
+  paint()
+  return wrap
+}
+
+function hashPane(lang, i, lastOut) {
+  let algo = '256'
+  const wrap = el('div', { className: 'tool-pane' })
+  const paint = () => {
+    const onRun =
+      algo === '256'
+        ? (s) => bytesToHex(sha256(new TextEncoder().encode(s)))
+        : (s) => bytesToHex(sha512(new TextEncoder().encode(s)))
+    const ws = workspace(lang, {
+      runLabel: algo === '256' ? 'SHA-256' : 'SHA-512',
+      onRun,
+      lastOutRef: lastOut,
+    })
+    wrap.replaceChildren(
+      segment(
+        [
+          { id: '256', label: 'SHA-256' },
+          { id: '512', label: 'SHA-512' },
+        ],
+        algo,
+        (id) => {
+          algo = id
+          paint()
+        },
+      ),
+      ws.node,
+    )
+  }
+  paint()
+  return wrap
+}
+
+function dataPane(lang, i, lastOut) {
+  let kind = 'json'
+  const wrap = el('div', { className: 'tool-pane' })
+  const paint = () => {
+    let runLabel = i.formatJson
+    let onRun = (s) => JSON.stringify(JSON.parse(s), null, 2)
+    if (kind === 'minify') {
+      runLabel = i.minifyJson
+      onRun = (s) => JSON.stringify(JSON.parse(s))
+    } else if (kind === 'jwt') {
+      runLabel = 'JWT'
+      onRun = decodeJwt
+    }
+    const ws = workspace(lang, {
+      runLabel,
+      onRun,
+      placeholder: kind === 'jwt' ? 'eyJhbGciOi…' : '{…}',
+      lastOutRef: lastOut,
+    })
+    wrap.replaceChildren(
+      segment(
+        [
+          { id: 'json', label: i.formatJson },
+          { id: 'minify', label: i.minifyJson },
+          { id: 'jwt', label: 'JWT' },
+        ],
+        kind,
+        (id) => {
+          kind = id
+          paint()
+        },
+      ),
+      ws.node,
+    )
+  }
+  paint()
+  return wrap
+}
+
+function generatePane(lang, i, lastOut) {
+  const out = el('input', { className: 'field mono', readonly: true, value: '' })
+  const set = (v) => {
+    out.value = v
+    lastOut.value = v
+  }
+  const copyBtn = el('button', {
     type: 'button',
-    className: 'btn primary',
-    text: i.genUuid,
-    onClick: () => {
-      uuidOut.value = crypto.randomUUID()
+    className: 'btn ghost',
+    text: i.copy,
+    onClick: async (e) => {
+      const ok = await copyText(out.value)
+      e.target.textContent = ok ? i.copied : i.copyFail
+      setTimeout(() => {
+        e.target.textContent = i.copy
+      }, 1200)
     },
   })
-  const passOut = el('input', { className: 'field mono', readonly: true, value: '' })
-  const genPass = el('button', {
-    type: 'button',
-    className: 'btn primary',
-    text: i.genPassword,
-    onClick: () => {
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%'
-      const buf = crypto.getRandomValues(new Uint8Array(20))
-      passOut.value = Array.from(buf, (b) => chars[b % chars.length]).join('')
-    },
-  })
-
-  const diffA = el('textarea', { className: 'paste-input tool-io', rows: '4', placeholder: 'A' })
-  const diffB = el('textarea', { className: 'paste-input tool-io', rows: '4', placeholder: 'B' })
-  const diffOut = el('textarea', { className: 'paste-input tool-io mono', rows: '6', readonly: true })
-
-  const shareFrom = el('select', { className: 'field' }, [
-    el('option', { value: 'b64e', text: 'Base64 out' }),
-    el('option', { value: 'json', text: 'JSON out' }),
-    el('option', { value: 'minify', text: 'JSON minify' }),
-    el('option', { value: 'hexe', text: 'Hex out' }),
-    el('option', { value: 'sha', text: 'SHA-256' }),
-    el('option', { value: 'jwt', text: 'JWT decode' }),
-    el('option', { value: 'uuid', text: 'UUID' }),
-    el('option', { value: 'pass', text: 'Password' }),
-    el('option', { value: 'diff', text: 'Diff' }),
+  return el('div', { className: 'tool-pane tool-workspace' }, [
+    out,
+    el('div', { className: 'btn-row' }, [
+      el('button', {
+        type: 'button',
+        className: 'btn primary',
+        text: i.genUuid,
+        onClick: () => set(crypto.randomUUID()),
+      }),
+      el('button', {
+        type: 'button',
+        className: 'btn primary',
+        text: i.genPassword,
+        onClick: () => {
+          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%'
+          const buf = crypto.getRandomValues(new Uint8Array(20))
+          set(Array.from(buf, (b) => chars[b % chars.length]).join(''))
+        },
+      }),
+      copyBtn,
+    ]),
   ])
+}
+
+function diffPane(lang, i, lastOut) {
+  const a = el('textarea', { className: 'paste-input tool-io', rows: '5', placeholder: 'A' })
+  const b = el('textarea', { className: 'paste-input tool-io', rows: '5', placeholder: 'B' })
+  const out = el('textarea', { className: 'paste-input tool-io mono', rows: '7', readonly: true })
+  return el('div', { className: 'tool-pane tool-workspace' }, [
+    a,
+    b,
+    el('div', { className: 'btn-row' }, [
+      el('button', {
+        type: 'button',
+        className: 'btn primary',
+        text: i.diff,
+        onClick: () => {
+          out.value = simpleDiff(a.value, b.value)
+          lastOut.value = out.value
+        },
+      }),
+      el('button', {
+        type: 'button',
+        className: 'btn ghost',
+        text: i.copy,
+        onClick: async (e) => {
+          const ok = await copyText(out.value)
+          e.target.textContent = ok ? i.copied : i.copyFail
+          setTimeout(() => {
+            e.target.textContent = i.copy
+          }, 1200)
+        },
+      }),
+    ]),
+    out,
+  ])
+}
+
+function sharePane(root, { siteName, lang, onLang, toolsEnabled, i, shareState, lastOut }) {
+  const sec = securityOptions(lang, shareState)
+  const status = el('p', { className: 'status', hidden: true })
+  const preview = el('textarea', {
+    className: 'paste-input tool-io',
+    rows: '5',
+    value: lastOut.value || '',
+    placeholder: i.shareToolHint,
+  })
 
   const shareBtn = el('button', {
     type: 'button',
     className: 'btn primary',
     text: i.shareAsPaste,
     onClick: async () => {
-      shareStatus.hidden = true
-      let text = ''
-      const v = shareFrom.value
-      if (v === 'uuid') text = uuidOut.value
-      else if (v === 'pass') text = passOut.value
-      else if (v === 'diff') text = diffOut.value
-      else text = boxes[v]?.output.value || ''
+      status.hidden = true
+      const text = preview.value
       if (!text.trim()) {
-        shareStatus.hidden = false
-        shareStatus.classList.add('error')
-        shareStatus.textContent = i.needContent
+        status.hidden = false
+        status.classList.add('error')
+        status.textContent = i.needContent
         return
       }
       shareBtn.disabled = true
@@ -213,62 +421,19 @@ export function renderTools(root, { siteName, lang, onLang, toolsEnabled }) {
           onAgain: () => renderTools(root, { siteName, lang, onLang, toolsEnabled }),
         })
       } catch (err) {
-        shareStatus.hidden = false
-        shareStatus.classList.add('error')
-        shareStatus.textContent = err.message || i.createError
+        status.hidden = false
+        status.classList.add('error')
+        status.textContent = err.message || i.createError
         shareBtn.disabled = false
       }
     },
   })
 
-  const grid = el('div', { className: 'tools-grid' }, [
-    toolCard('Base64 encode', boxes.b64e.node),
-    toolCard('Base64 decode', boxes.b64d.node),
-    toolCard('URL encode', boxes.urle.node),
-    toolCard('URL decode', boxes.urld.node),
-    toolCard('SHA-256', boxes.sha.node),
-    toolCard('SHA-512', boxes.sha512.node),
-    toolCard('JWT decode', boxes.jwt.node),
-    toolCard(i.formatJson, boxes.json.node),
-    toolCard(i.minifyJson, boxes.minify.node),
-    toolCard('Hex encode', boxes.hexe.node),
-    toolCard('Hex decode', boxes.hexd.node),
-    toolCard(i.genUuid, el('div', { className: 'tool-stack' }, [uuidOut, genUuid])),
-    toolCard(i.genPassword, el('div', { className: 'tool-stack' }, [passOut, genPass])),
-    toolCard(i.diff, el('div', { className: 'tool-stack' }, [
-      diffA,
-      diffB,
-      el('button', {
-        type: 'button',
-        className: 'btn primary',
-        text: i.diff,
-        onClick: () => {
-          diffOut.value = simpleDiff(diffA.value, diffB.value)
-        },
-      }),
-      diffOut,
-    ])),
-  ])
-
-  const sharePanel = el('section', { className: 'panel' }, [
-    el('h2', { className: 'panel-title', text: i.shareAsPaste }),
-    el('p', { className: 'panel-sub', text: i.shareToolHint }),
-    el('label', { className: 'field-label', text: i.shareSource }),
-    shareFrom,
+  return el('div', { className: 'tool-pane tool-workspace' }, [
+    el('p', { className: 'hint', text: i.shareToolHint }),
+    preview,
     sec.node,
     shareBtn,
-    shareStatus,
+    status,
   ])
-
-  root.replaceChildren(
-    el('div', { className: 'shell page-slide' }, [
-      topBar(lang, onLang, el('a', { href: '/', className: 'back-link', text: '← NeoPaste' })),
-      el('header', { className: 'brand compact' }, [
-        el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
-        el('p', { className: 'brand-tag', text: i.toolsTitle }),
-      ]),
-      grid,
-      sharePanel,
-    ]),
-  )
 }
