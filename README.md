@@ -51,8 +51,7 @@ curl -fsSL -o neopaste-linux-amd64.tar.gz \
 2. Copy to the server, then:
 
 ```bash
-tar -xzf neopaste-linux-amd64.tar.gz
-cd neopaste
+`tar -xzf neopaste-linux-amd64.tar.gz && cd neopaste && sudo bash install.sh`
 sudo bash install.sh            # menu: update / install / uninstall
 sudo bash install.sh --update   # update only
 sudo bash install.sh --uninstall
@@ -103,3 +102,17 @@ curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scri
 ```bash
 make package
 ```
+
+---
+
+## 💖 Donation (حمایت مالی)
+
+If you find this project helpful and want to support its development, you can donate us via:
+اگر این پروژه برای شما مفید بوده و تمایل به حمایت از توسعهی آن دارید، میتوانید از طریق زیر از ما حمایت کنید:
+
+* **USDT (BEP20):**
+  `0xacA935a5955a756BedaE4738304274EdeE0223D5`
+
+---
+Telegram Channels:  [NeoAurora](https://t.me/neoaurora) / [HMPanel](https://t.me/hmpanel)
+*Built with ❤️ for the Freedom.*
