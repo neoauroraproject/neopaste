@@ -1,0 +1,14 @@
+bin/
+dist/
+data/
+web/node_modules/
+web/dist/
+*.exe
+*.test
+.DS_Store
+.env
+*.db
+*.db-*
+*.log
+cookies.txt
+tmp-*
