@@ -1,5 +1,10 @@
+import { pbkdf2 } from '@noble/hashes/pbkdf2.js'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { gcm } from '@noble/ciphers/aes.js'
+
 const te = new TextEncoder()
 const td = new TextDecoder()
+const ITERATIONS = 210000
 
 function b64encode(buf) {
   const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : buf
@@ -17,39 +22,39 @@ function b64decode(str) {
   return out
 }
 
-async function deriveBits(password, salt, purpose) {
-  const baseKey = await crypto.subtle.importKey(
-    'raw',
-    te.encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits'],
-  )
-  const purposeSalt = new Uint8Array(salt.length + purpose.length)
-  purposeSalt.set(salt, 0)
-  purposeSalt.set(te.encode(purpose), salt.length)
-  return crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: purposeSalt, iterations: 210000, hash: 'SHA-256' },
-    baseKey,
-    256,
-  )
+function purposeSalt(salt, purpose) {
+  const p = te.encode(purpose)
+  const out = new Uint8Array(salt.length + p.length)
+  out.set(salt, 0)
+  out.set(p, salt.length)
+  return out
 }
 
-async function deriveAesKey(password, salt) {
-  const bits = await deriveBits(password, salt, 'enc')
-  return crypto.subtle.importKey('raw', bits, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'])
+function deriveBits(password, salt, purpose) {
+  return pbkdf2(sha256, te.encode(password), purposeSalt(salt, purpose), {
+    c: ITERATIONS,
+    dkLen: 32,
+  })
+}
+
+function randomBytes(n) {
+  const out = new Uint8Array(n)
+  crypto.getRandomValues(out)
+  return out
+}
+
+/** Random passphrase when user disables custom password (embedded in URL hash). */
+export function randomPassphrase() {
+  return b64encode(randomBytes(18))
 }
 
 export async function encryptPaste(plaintext, password) {
-  const salt = crypto.getRandomValues(new Uint8Array(16))
-  const iv = crypto.getRandomValues(new Uint8Array(12))
-  const key = await deriveAesKey(password, salt)
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    te.encode(plaintext),
-  )
-  const verifyBits = await deriveBits(password, salt, 'verify')
+  const salt = randomBytes(16)
+  const iv = randomBytes(12)
+  const key = deriveBits(password, salt, 'enc')
+  const aes = gcm(key, iv)
+  const ciphertext = aes.encrypt(te.encode(plaintext))
+  const verifyBits = deriveBits(password, salt, 'verify')
   return {
     ciphertext: b64encode(ciphertext),
     salt: b64encode(salt),
@@ -59,16 +64,13 @@ export async function encryptPaste(plaintext, password) {
 }
 
 export async function decryptPaste({ ciphertext, salt, iv }, password) {
-  const key = await deriveAesKey(password, b64decode(salt))
-  const plain = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: b64decode(iv) },
-    key,
-    b64decode(ciphertext),
-  )
+  const key = deriveBits(password, b64decode(salt), 'enc')
+  const aes = gcm(key, b64decode(iv))
+  const plain = aes.decrypt(b64decode(ciphertext))
   return td.decode(plain)
 }
 
 export async function passwordVerify(password, saltB64) {
-  const bits = await deriveBits(password, b64decode(saltB64), 'verify')
+  const bits = deriveBits(password, b64decode(saltB64), 'verify')
   return b64encode(bits)
 }

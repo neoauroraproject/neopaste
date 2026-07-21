@@ -1,5 +1,5 @@
 import { api, el, copyText, animateIn } from './util.js'
-import { encryptPaste } from './crypto.js'
+import { encryptPaste, randomPassphrase } from './crypto.js'
 
 const EXPIRY = [
   { label: '۳۰ دقیقه', sec: 30 * 60 },
@@ -13,7 +13,47 @@ const EXPIRY = [
   { label: '۳۰ روز', sec: 30 * 24 * 60 * 60 },
 ]
 
+function optionRow({ title, hint, checked, onChange, body }) {
+  const check = el('input', {
+    type: 'checkbox',
+    className: 'opt-check',
+    checked: !!checked,
+    onChange: (e) => onChange(e.target.checked),
+  })
+  if (checked) check.checked = true
+
+  const head = el('label', { className: 'opt-head' }, [
+    check,
+    el('span', { className: 'opt-switch', 'aria-hidden': 'true' }),
+    el('span', { className: 'opt-text' }, [
+      el('strong', { className: 'opt-title', text: title }),
+      hint ? el('span', { className: 'opt-hint', text: hint }) : null,
+    ]),
+  ])
+
+  const bodyWrap = el('div', {
+    className: 'opt-body' + (checked ? ' open' : ''),
+    hidden: !checked,
+  }, body ? [body] : [])
+
+  const row = el('div', { className: 'opt-row' + (checked ? ' on' : '') }, [head, bodyWrap])
+
+  return {
+    row,
+    setOpen(open) {
+      bodyWrap.hidden = !open
+      bodyWrap.classList.toggle('open', open)
+      row.classList.toggle('on', open)
+      check.checked = open
+    },
+    check,
+    bodyWrap,
+  }
+}
+
 export function renderHome(root, { siteName }) {
+  let usePassword = true
+  let useExpiry = true
   let selected = EXPIRY[2].sec
   let burn = false
   let busy = false
@@ -33,7 +73,7 @@ export function renderHome(root, { siteName }) {
   const password = el('input', {
     className: 'field',
     type: 'password',
-    placeholder: 'رمز عبور',
+    placeholder: 'یک رمز قوی انتخاب کنید',
     autocomplete: 'new-password',
   })
 
@@ -52,15 +92,39 @@ export function renderHome(root, { siteName }) {
     chips.append(chip)
   })
 
-  const burnToggle = el('label', { className: 'toggle' }, [
-    el('input', {
-      type: 'checkbox',
-      onChange: (e) => {
-        burn = e.target.checked
-      },
-    }),
-    el('span', { text: 'حذف بعد از اولین مشاهده' }),
-  ])
+  const passOpt = optionRow({
+    title: 'محافظت با رمز',
+    hint: 'گیرنده برای باز کردن باید رمز را بداند',
+    checked: true,
+    onChange: (on) => {
+      usePassword = on
+      passOpt.setOpen(on)
+    },
+    body: password,
+  })
+
+  const expiryOpt = optionRow({
+    title: 'انقضای خودکار',
+    hint: 'بعد از این زمان از سرور حذف می‌شود',
+    checked: true,
+    onChange: (on) => {
+      useExpiry = on
+      expiryOpt.setOpen(on)
+      if (!on) selected = 30 * 24 * 60 * 60 // fallback max when toggled off visually still need expiry server-side
+    },
+    body: chips,
+  })
+
+  const burnOpt = optionRow({
+    title: 'حذف بعد از اولین مشاهده',
+    hint: 'لینک فقط یک‌بار قابل باز شدن است',
+    checked: false,
+    onChange: (on) => {
+      burn = on
+      burnOpt.row.classList.toggle('on', on)
+    },
+  })
+  burnOpt.bodyWrap.remove()
 
   const status = el('p', { className: 'status', hidden: true })
   const result = el('div', { className: 'result', hidden: true })
@@ -74,15 +138,25 @@ export function renderHome(root, { siteName }) {
       status.hidden = true
       result.hidden = true
       const text = content.value.trim()
-      const pass = password.value
       if (!text) {
         showStatus(status, 'متن یا لینک را وارد کنید', true)
         return
       }
-      if (!pass || pass.length < 4) {
-        showStatus(status, 'رمز حداقل ۴ کاراکتر باشد', true)
-        return
+
+      let pass = password.value
+      let keyInUrl = false
+      if (usePassword) {
+        if (!pass || pass.length < 4) {
+          showStatus(status, 'رمز حداقل ۴ کاراکتر باشد', true)
+          return
+        }
+      } else {
+        pass = randomPassphrase()
+        keyInUrl = true
       }
+
+      const expiresIn = useExpiry ? selected : 30 * 24 * 60 * 60
+
       busy = true
       submit.disabled = true
       submit.textContent = 'در حال رمزنگاری…'
@@ -92,11 +166,13 @@ export function renderHome(root, { siteName }) {
           method: 'POST',
           body: JSON.stringify({
             ...enc,
-            expires_in_sec: selected,
+            expires_in_sec: expiresIn,
             burn_after_read: burn,
           }),
         })
-        const url = `${location.origin}${data.url}`
+        let url = `${location.origin}${data.url}`
+        if (keyInUrl) url += `#${encodeURIComponent(pass)}`
+
         result.hidden = false
         result.replaceChildren(
           el('p', { className: 'result-label', text: 'لینک شما آماده است' }),
@@ -117,7 +193,9 @@ export function renderHome(root, { siteName }) {
           ]),
           el('p', {
             className: 'hint',
-            text: 'رمز را جداگانه برای گیرنده بفرستید — سرور متن خام را نمی‌بیند.',
+            text: keyInUrl
+              ? 'کلید داخل لینک است — لینک کامل را بفرستید. سرور متن خام را نمی‌بیند.'
+              : 'رمز را جداگانه برای گیرنده بفرستید — سرور متن خام را نمی‌بیند.',
           }),
         )
         animateIn(result)
@@ -133,12 +211,15 @@ export function renderHome(root, { siteName }) {
     },
   })
 
+  const options = el('div', { className: 'options' }, [
+    passOpt.row,
+    expiryOpt.row,
+    burnOpt.row,
+  ])
+
   const form = el('section', { className: 'panel create-panel' }, [
     content,
-    el('div', { className: 'row' }, [password]),
-    el('div', { className: 'section-label', text: 'انقضا' }),
-    chips,
-    burnToggle,
+    options,
     submit,
     status,
     result,

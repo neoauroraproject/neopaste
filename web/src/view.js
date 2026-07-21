@@ -1,6 +1,11 @@
 import { api, el, copyText, animateIn } from './util.js'
 import { decryptPaste, passwordVerify } from './crypto.js'
 
+function hashPassword() {
+  const h = location.hash.replace(/^#/, '')
+  return h ? decodeURIComponent(h) : ''
+}
+
 export function renderView(root, { siteName, id }) {
   const brand = el('header', { className: 'brand compact' }, [
     el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
@@ -12,13 +17,22 @@ export function renderView(root, { siteName, id }) {
   animateIn(panel)
 
   api(`/api/pastes/${encodeURIComponent(id)}`)
-    .then((meta) => {
+    .then(async (meta) => {
       if (meta.locked) {
         status.classList.add('error')
         status.textContent = 'این لینک موقتاً قفل شده است. کمی بعد دوباره تلاش کنید.'
         return
       }
-      showUnlockForm(panel, id, meta)
+      const fromHash = hashPassword()
+      if (fromHash) {
+        try {
+          await unlockWithPassword(panel, id, meta, fromHash)
+          return
+        } catch {
+          /* fall through to form */
+        }
+      }
+      showUnlockForm(panel, id, meta, fromHash)
     })
     .catch((err) => {
       status.classList.add('error')
@@ -26,13 +40,26 @@ export function renderView(root, { siteName, id }) {
     })
 }
 
-function showUnlockForm(panel, id, meta) {
+async function unlockWithPassword(panel, id, meta, pass) {
+  if (!meta.salt) throw new Error('اطلاعات لینک ناقص است')
+  const verify = await passwordVerify(pass, meta.salt)
+  const payload = await api(`/api/pastes/${encodeURIComponent(id)}/unlock`, {
+    method: 'POST',
+    body: JSON.stringify({ password_verify: verify }),
+  })
+  const plain = await decryptPaste(payload, pass)
+  showContent(panel, plain, meta)
+}
+
+function showUnlockForm(panel, id, meta, prefill = '') {
   const password = el('input', {
     className: 'field',
     type: 'password',
     placeholder: 'رمز عبور',
     autocomplete: 'current-password',
+    value: prefill || undefined,
   })
+  if (prefill) password.value = prefill
   const status = el('p', { className: 'status', hidden: true })
   let busy = false
 
@@ -54,14 +81,7 @@ function showUnlockForm(panel, id, meta) {
       btn.textContent = 'در حال باز کردن…'
       status.hidden = true
       try {
-        if (!meta.salt) throw new Error('اطلاعات لینک ناقص است')
-        const verify = await passwordVerify(pass, meta.salt)
-        const payload = await api(`/api/pastes/${encodeURIComponent(id)}/unlock`, {
-          method: 'POST',
-          body: JSON.stringify({ password_verify: verify }),
-        })
-        const plain = await decryptPaste(payload, pass)
-        showContent(panel, plain, meta)
+        await unlockWithPassword(panel, id, meta, pass)
       } catch (err) {
         status.hidden = false
         status.classList.add('error')
