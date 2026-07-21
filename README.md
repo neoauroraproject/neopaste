@@ -51,7 +51,7 @@ curl -fsSL -o neopaste-linux-amd64.tar.gz \
 2. Copy to the server, then:
 
 ```bash
-`tar -xzf neopaste-linux-amd64.tar.gz && cd neopaste && sudo bash install.sh`
+tar -xzf neopaste-linux-amd64.tar.gz && cd neopaste && sudo bash install.sh
 sudo bash install.sh            # menu: update / install / uninstall
 sudo bash install.sh --update   # update only
 sudo bash install.sh --uninstall
