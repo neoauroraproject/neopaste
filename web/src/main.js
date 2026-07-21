@@ -6,7 +6,7 @@ import '@fontsource/vazirmatn/700.css'
 import './styles.css'
 import { api } from './util.js'
 import { applyDocumentLang, getLang } from './i18n.js'
-import { renderHome } from './home.js'
+import { renderHome, renderTools } from './home.js'
 import { renderView } from './view.js'
 import { renderAdmin } from './admin.js'
 
@@ -14,11 +14,12 @@ const app = document.getElementById('app')
 
 async function boot() {
   applyDocumentLang(getLang())
-
   let siteName = 'NeoPaste'
+  let toolsEnabled = true
   try {
     const cfg = await api('/api/public-config')
     if (cfg.site_name) siteName = cfg.site_name
+    if (cfg.tools_enabled === false) toolsEnabled = false
   } catch {
     /* first paint */
   }
@@ -29,12 +30,20 @@ async function boot() {
     renderAdmin(app, { siteName })
     return
   }
+  if (path === '/tools') {
+    const showTools = (lang) => {
+      applyDocumentLang(lang)
+      renderTools(app, { siteName, lang, toolsEnabled, onLang: showTools })
+    }
+    showTools(getLang())
+    return
+  }
   const m = path.match(/^\/p\/([A-Za-z0-9]+)$/)
   if (m) {
     renderView(app, { siteName, id: m[1] })
     return
   }
-  renderHome(app, { siteName })
+  renderHome(app, { siteName, toolsEnabled })
 }
 
 boot()

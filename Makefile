@@ -1,7 +1,7 @@
 APP_NAME := neopaste
 MODULE := github.com/neoauroraproject/neopaste
 DIST := dist/neopaste
-VERSION ?= 1.0.0
+VERSION ?= 1.2.0
 
 .PHONY: all web deps build build-linux build-linux-arm64 package clean run
 

@@ -42,11 +42,16 @@ type createRequest struct {
 	PasswordVerify string `json:"password_verify"`
 	ExpiresInSec   int64  `json:"expires_in_sec"`
 	BurnAfterRead  bool   `json:"burn_after_read"`
+	Kind           string `json:"kind"`
+	Lang           string `json:"lang"`
+	Mime           string `json:"mime"`
 }
 
 type createResponse struct {
-	ID  string `json:"id"`
-	URL string `json:"url"`
+	ID        string `json:"id"`
+	URL       string `json:"url"`
+	ExpiresAt int64  `json:"expires_at"`
+	Kind      string `json:"kind"`
 }
 
 type unlockRequest struct {
@@ -60,6 +65,9 @@ type pastePayload struct {
 	IV            string `json:"iv"`
 	BurnAfterRead bool   `json:"burn_after_read"`
 	ExpiresAt     int64  `json:"expires_at"`
+	Kind          string `json:"kind"`
+	Lang          string `json:"lang"`
+	Mime          string `json:"mime"`
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -68,16 +76,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req createRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxCiphertextBytes+4096)).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, (1500<<10)+8192)).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "درخواست نامعتبر")
 		return
 	}
 	if req.Ciphertext == "" || req.Salt == "" || req.IV == "" || req.PasswordVerify == "" {
 		writeErr(w, http.StatusBadRequest, "فیلدهای ضروری ناقص است")
-		return
-	}
-	if len(req.Ciphertext) > maxCiphertextBytes {
-		writeErr(w, http.StatusRequestEntityTooLarge, "محتوا خیلی بزرگ است")
 		return
 	}
 	if req.ExpiresInSec <= 0 || req.ExpiresInSec > 365*24*3600 {
@@ -91,6 +95,22 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
+	kind := req.Kind
+	if kind == "" {
+		kind = "text"
+	}
+	if kind != "text" && kind != "code" && kind != "image" {
+		writeErr(w, http.StatusBadRequest, "نوع محتوا نامعتبر است")
+		return
+	}
+	maxBytes := maxCiphertextBytes
+	if kind == "image" {
+		maxBytes = 1500 << 10
+	}
+	if len(req.Ciphertext) > maxBytes {
+		writeErr(w, http.StatusRequestEntityTooLarge, "محتوا خیلی بزرگ است")
+		return
+	}
 	p := store.Paste{
 		ID:             id,
 		Ciphertext:     req.Ciphertext,
@@ -100,12 +120,17 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:      now.Add(time.Duration(req.ExpiresInSec) * time.Second),
 		BurnAfterRead:  req.BurnAfterRead,
 		CreatedAt:      now,
+		Kind:           kind,
+		Lang:           req.Lang,
+		Mime:           req.Mime,
 	}
 	if err := h.Store.CreatePaste(p); err != nil {
 		writeErr(w, http.StatusInternalServerError, "ذخیره‌سازی ناموفق")
 		return
 	}
-	writeJSON(w, http.StatusCreated, createResponse{ID: id, URL: "/p/" + id})
+	writeJSON(w, http.StatusCreated, createResponse{
+		ID: id, URL: "/p/" + id, ExpiresAt: p.ExpiresAt.Unix(), Kind: kind,
+	})
 }
 
 func (h *Handler) Meta(w http.ResponseWriter, r *http.Request) {
@@ -128,6 +153,9 @@ func (h *Handler) Meta(w http.ResponseWriter, r *http.Request) {
 		"expires_at":      p.ExpiresAt.Unix(),
 		"burn_after_read": p.BurnAfterRead,
 		"locked":          p.LockedUntil != nil && time.Now().UTC().Before(*p.LockedUntil),
+		"kind":            p.Kind,
+		"lang":            p.Lang,
+		"mime":            p.Mime,
 	})
 }
 
@@ -190,6 +218,9 @@ func (h *Handler) Unlock(w http.ResponseWriter, r *http.Request) {
 		IV:            p.IV,
 		BurnAfterRead: p.BurnAfterRead,
 		ExpiresAt:     p.ExpiresAt.Unix(),
+		Kind:          p.Kind,
+		Lang:          p.Lang,
+		Mime:          p.Mime,
 	}
 	if p.BurnAfterRead {
 		_ = h.Store.DeletePaste(id)

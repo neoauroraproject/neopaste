@@ -41,11 +41,12 @@ type loginRequest struct {
 }
 
 type settingsRequest struct {
-	SiteName   string `json:"site_name"`
-	Domain     string `json:"domain"`
-	TLSEnabled bool   `json:"tls_enabled"`
-	CertPath   string `json:"cert_path"`
-	KeyPath    string `json:"key_path"`
+	SiteName     string `json:"site_name"`
+	Domain       string `json:"domain"`
+	TLSEnabled   bool   `json:"tls_enabled"`
+	CertPath     string `json:"cert_path"`
+	KeyPath      string `json:"key_path"`
+	ToolsEnabled bool   `json:"tools_enabled"`
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -158,11 +159,12 @@ func (h *Handler) PutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	st := store.Settings{
-		SiteName:   req.SiteName,
-		Domain:     req.Domain,
-		TLSEnabled: req.TLSEnabled,
-		CertPath:   req.CertPath,
-		KeyPath:    req.KeyPath,
+		SiteName:     req.SiteName,
+		Domain:       req.Domain,
+		TLSEnabled:   req.TLSEnabled,
+		CertPath:     req.CertPath,
+		KeyPath:      req.KeyPath,
+		ToolsEnabled: req.ToolsEnabled,
 	}
 	if err := h.Store.UpdateSettings(st); err != nil {
 		writeErr(w, http.StatusInternalServerError, "ذخیره تنظیمات ناموفق")
@@ -172,6 +174,33 @@ func (h *Handler) PutSettings(w http.ResponseWriter, r *http.Request) {
 		h.OnTLSChange()
 	}
 	writeJSON(w, http.StatusOK, st)
+}
+
+func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
+	if !h.authenticated(r) {
+		writeErr(w, http.StatusUnauthorized, "نیاز به ورود")
+		return
+	}
+	st, err := h.Store.GetStats()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "خطا در آمار")
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+func (h *Handler) PurgeExpired(w http.ResponseWriter, r *http.Request) {
+	if !h.authenticated(r) {
+		writeErr(w, http.StatusUnauthorized, "نیاز به ورود")
+		return
+	}
+	n, err := h.Store.DeleteExpired(time.Now().UTC())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "پاک‌سازی ناموفق")
+		return
+	}
+	_ = h.Store.Vacuum()
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": n})
 }
 
 func (h *Handler) Middleware(next http.HandlerFunc) http.HandlerFunc {

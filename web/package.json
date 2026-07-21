@@ -11,7 +11,9 @@
   "dependencies": {
     "@fontsource/vazirmatn": "^5.2.5",
     "@noble/ciphers": "^2.2.0",
-    "@noble/hashes": "^2.2.0"
+    "@noble/hashes": "^2.2.0",
+    "highlight.js": "^11.11.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "vite": "^6.0.0"

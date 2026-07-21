@@ -88,9 +88,13 @@ curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scri
 
 - Client-side E2E encryption (works on HTTP too)
 - Password / expiry / burn-after-read toggles
-- Persian & English UI
-- Admin: site name, domain, TLS paths
-- Single Go binary + SQLite
+- Result page with QR + local recent-link cards
+- Hub: Paste / Code / Image + optional Toolbox
+- Toolbox (browser-only): Base64, URL, Hex, Hash, JWT, JSON, UUID, Diff → share as paste
+- Light image share (client compress) + code share with highlight
+- Templates, admin stats / purge / tools toggle
+- Persian & English UI · single Go binary + SQLite
+- Identity: **secure share hub + tiny toolbox**
 
 ## Build from source
 

@@ -58,6 +58,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/admin/me", s.admin.Me)
 	mux.HandleFunc("GET /api/admin/settings", s.admin.GetSettings)
 	mux.HandleFunc("PUT /api/admin/settings", s.admin.PutSettings)
+	mux.HandleFunc("GET /api/admin/stats", s.admin.GetStats)
+	mux.HandleFunc("POST /api/admin/purge-expired", s.admin.PurgeExpired)
 
 	static, err := fs.Sub(s.webFS, "dist")
 	if err != nil {
@@ -95,9 +97,10 @@ func (s *Server) publicConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"site_name":   st.SiteName,
-		"domain":      st.Domain,
-		"tls_enabled": st.TLSEnabled,
+		"site_name":     st.SiteName,
+		"domain":        st.Domain,
+		"tls_enabled":   st.TLSEnabled,
+		"tools_enabled": st.ToolsEnabled,
 	})
 }
 

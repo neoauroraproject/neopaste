@@ -11,33 +11,44 @@ import (
 )
 
 type Store struct {
-	db *sql.DB
+	db     *sql.DB
+	DBPath string
 }
 
 type Paste struct {
-	ID              string
-	Ciphertext      string
-	Salt            string
-	IV              string
-	PasswordVerify  string
-	ExpiresAt       time.Time
-	BurnAfterRead   bool
-	CreatedAt       time.Time
-	FailCount       int
-	LockedUntil     *time.Time
+	ID             string
+	Ciphertext     string
+	Salt           string
+	IV             string
+	PasswordVerify string
+	ExpiresAt      time.Time
+	BurnAfterRead  bool
+	CreatedAt      time.Time
+	FailCount      int
+	LockedUntil    *time.Time
+	Kind           string // text | code | image
+	Lang           string
+	Mime           string
 }
 
 type Settings struct {
-	SiteName   string `json:"site_name"`
-	Domain     string `json:"domain"`
-	TLSEnabled bool   `json:"tls_enabled"`
-	CertPath   string `json:"cert_path"`
-	KeyPath    string `json:"key_path"`
+	SiteName     string `json:"site_name"`
+	Domain       string `json:"domain"`
+	TLSEnabled   bool   `json:"tls_enabled"`
+	CertPath     string `json:"cert_path"`
+	KeyPath      string `json:"key_path"`
+	ToolsEnabled bool   `json:"tools_enabled"`
 }
 
 type Admin struct {
 	Username     string
 	PasswordHash string
+}
+
+type Stats struct {
+	ActivePastes int64 `json:"active_pastes"`
+	TotalPastes  int64 `json:"total_pastes"`
+	DBBytes      int64 `json:"db_bytes"`
 }
 
 func Open(dbPath string) (*Store, error) {
@@ -49,7 +60,7 @@ func Open(dbPath string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db}
+	s := &Store{db: db, DBPath: dbPath}
 	if err := s.migrate(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -73,7 +84,10 @@ CREATE TABLE IF NOT EXISTS pastes (
   burn_after_read INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   fail_count INTEGER NOT NULL DEFAULT 0,
-  locked_until INTEGER
+  locked_until INTEGER,
+  kind TEXT NOT NULL DEFAULT 'text',
+  lang TEXT NOT NULL DEFAULT '',
+  mime TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -82,7 +96,8 @@ CREATE TABLE IF NOT EXISTS settings (
   domain TEXT NOT NULL DEFAULT '',
   tls_enabled INTEGER NOT NULL DEFAULT 0,
   cert_path TEXT NOT NULL DEFAULT '',
-  key_path TEXT NOT NULL DEFAULT ''
+  key_path TEXT NOT NULL DEFAULT '',
+  tools_enabled INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS admin (
@@ -98,23 +113,40 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 INSERT OR IGNORE INTO settings (id, site_name) VALUES (1, 'NeoPaste');
 `
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	// Additive migrations for existing DBs
+	alters := []string{
+		`ALTER TABLE pastes ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'`,
+		`ALTER TABLE pastes ADD COLUMN lang TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE pastes ADD COLUMN mime TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE settings ADD COLUMN tools_enabled INTEGER NOT NULL DEFAULT 1`,
+	}
+	for _, q := range alters {
+		_, _ = s.db.Exec(q) // ignore "duplicate column" errors
+	}
+	return nil
 }
 
 func (s *Store) CreatePaste(p Paste) error {
+	if p.Kind == "" {
+		p.Kind = "text"
+	}
 	_, err := s.db.Exec(`
-INSERT INTO pastes (id, ciphertext, salt, iv, password_verify, expires_at, burn_after_read, created_at, fail_count)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+INSERT INTO pastes (id, ciphertext, salt, iv, password_verify, expires_at, burn_after_read, created_at, fail_count, kind, lang, mime)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
 		p.ID, p.Ciphertext, p.Salt, p.IV, p.PasswordVerify,
 		p.ExpiresAt.Unix(), boolToInt(p.BurnAfterRead), p.CreatedAt.Unix(),
+		p.Kind, p.Lang, p.Mime,
 	)
 	return err
 }
 
 func (s *Store) GetPaste(id string) (*Paste, error) {
 	row := s.db.QueryRow(`
-SELECT id, ciphertext, salt, iv, password_verify, expires_at, burn_after_read, created_at, fail_count, locked_until
+SELECT id, ciphertext, salt, iv, password_verify, expires_at, burn_after_read, created_at, fail_count, locked_until,
+       COALESCE(kind,'text'), COALESCE(lang,''), COALESCE(mime,'')
 FROM pastes WHERE id = ?`, id)
 
 	var p Paste
@@ -122,7 +154,7 @@ FROM pastes WHERE id = ?`, id)
 	var burn int
 	var locked sql.NullInt64
 	err := row.Scan(&p.ID, &p.Ciphertext, &p.Salt, &p.IV, &p.PasswordVerify,
-		&expires, &burn, &created, &p.FailCount, &locked)
+		&expires, &burn, &created, &p.FailCount, &locked, &p.Kind, &p.Lang, &p.Mime)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -173,22 +205,40 @@ func (s *Store) Vacuum() error {
 
 func (s *Store) GetSettings() (Settings, error) {
 	var st Settings
-	var tls int
-	err := s.db.QueryRow(`SELECT site_name, domain, tls_enabled, cert_path, key_path FROM settings WHERE id = 1`).
-		Scan(&st.SiteName, &st.Domain, &tls, &st.CertPath, &st.KeyPath)
+	var tls, tools int
+	err := s.db.QueryRow(`
+SELECT site_name, domain, tls_enabled, cert_path, key_path, COALESCE(tools_enabled,1)
+FROM settings WHERE id = 1`).
+		Scan(&st.SiteName, &st.Domain, &tls, &st.CertPath, &st.KeyPath, &tools)
 	if err != nil {
 		return st, err
 	}
 	st.TLSEnabled = tls == 1
+	st.ToolsEnabled = tools == 1
 	return st, nil
 }
 
 func (s *Store) UpdateSettings(st Settings) error {
 	_, err := s.db.Exec(`
-UPDATE settings SET site_name = ?, domain = ?, tls_enabled = ?, cert_path = ?, key_path = ? WHERE id = 1`,
-		st.SiteName, st.Domain, boolToInt(st.TLSEnabled), st.CertPath, st.KeyPath,
+UPDATE settings SET site_name = ?, domain = ?, tls_enabled = ?, cert_path = ?, key_path = ?, tools_enabled = ? WHERE id = 1`,
+		st.SiteName, st.Domain, boolToInt(st.TLSEnabled), st.CertPath, st.KeyPath, boolToInt(st.ToolsEnabled),
 	)
 	return err
+}
+
+func (s *Store) GetStats() (Stats, error) {
+	var st Stats
+	now := time.Now().UTC().Unix()
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM pastes WHERE expires_at > ?`, now).Scan(&st.ActivePastes); err != nil {
+		return st, err
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM pastes`).Scan(&st.TotalPastes); err != nil {
+		return st, err
+	}
+	if fi, err := os.Stat(s.DBPath); err == nil {
+		st.DBBytes = fi.Size()
+	}
+	return st, nil
 }
 
 func (s *Store) GetAdmin() (*Admin, error) {

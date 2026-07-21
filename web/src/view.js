@@ -2,6 +2,21 @@ import { api, el, copyText, animateIn, setChildren } from './util.js'
 import { decryptPaste, passwordVerify } from './crypto.js'
 import { getLang, setLang, t } from './i18n.js'
 import { langSwitch } from './langswitch.js'
+import hljs from 'highlight.js/lib/core'
+import javascript from 'highlight.js/lib/languages/javascript'
+import python from 'highlight.js/lib/languages/python'
+import go from 'highlight.js/lib/languages/go'
+import bash from 'highlight.js/lib/languages/bash'
+import json from 'highlight.js/lib/languages/json'
+import xml from 'highlight.js/lib/languages/xml'
+import 'highlight.js/styles/github-dark.css'
+
+hljs.registerLanguage('javascript', javascript)
+hljs.registerLanguage('python', python)
+hljs.registerLanguage('go', go)
+hljs.registerLanguage('bash', bash)
+hljs.registerLanguage('json', json)
+hljs.registerLanguage('xml', xml)
 
 function hashPassword() {
   const h = location.hash.replace(/^#/, '')
@@ -12,31 +27,32 @@ export function renderView(root, { siteName, id }) {
   let lang = getLang()
   setLang(lang)
 
-  const mountShell = (panelContent) => {
-    const i = t(lang)
-    const topbar = el('div', { className: 'topbar' }, [
-      el('a', { href: '/', className: 'back-link', text: '← NeoPaste' }),
-      langSwitch(lang, (next) => {
-        lang = next
-        setLang(lang)
-        renderView(root, { siteName, id })
-      }),
-    ])
-    const brand = el('header', { className: 'brand compact' }, [
-      el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
-    ])
-    const panel = el('section', { className: 'panel view-panel' }, panelContent)
-    root.replaceChildren(el('div', { className: 'shell narrow' }, [topbar, brand, panel]))
-    animateIn(panel)
-    return { panel, i }
-  }
-
-  const { panel, i } = mountShell([el('p', { className: 'status', text: t(lang).checking })])
+  const i = t(lang)
+  const panel = el('section', { className: 'panel view-panel' }, [
+    el('p', { className: 'status', text: i.checking }),
+  ])
+  root.replaceChildren(
+    el('div', { className: 'shell narrow page-slide' }, [
+      el('div', { className: 'topbar' }, [
+        el('a', { href: '/', className: 'back-link', text: '← NeoPaste' }),
+        langSwitch(lang, (next) => {
+          lang = next
+          setLang(lang)
+          renderView(root, { siteName, id })
+        }),
+      ]),
+      el('header', { className: 'brand compact' }, [
+        el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
+      ]),
+      panel,
+    ]),
+  )
+  animateIn(panel)
 
   api(`/api/pastes/${encodeURIComponent(id)}`)
     .then(async (meta) => {
       if (meta.locked) {
-        panel.replaceChildren(el('p', { className: 'status error', text: i.locked }))
+        panel.replaceChildren(el('p', { className: 'status error', text: t(lang).locked }))
         return
       }
       const fromHash = hashPassword()
@@ -51,7 +67,7 @@ export function renderView(root, { siteName, id }) {
       showUnlockForm(panel, id, meta, fromHash, lang)
     })
     .catch((err) => {
-      panel.replaceChildren(el('p', { className: 'status error', text: err.message || i.notFound }))
+      panel.replaceChildren(el('p', { className: 'status error', text: err.message || t(lang).notFound }))
     })
 }
 
@@ -64,7 +80,7 @@ async function unlockWithPassword(panel, id, meta, pass, lang) {
     body: JSON.stringify({ password_verify: verify }),
   })
   const plain = await decryptPaste(payload, pass)
-  showContent(panel, plain, meta, lang)
+  showContent(panel, plain, { ...meta, ...payload }, lang)
 }
 
 function showUnlockForm(panel, id, meta, prefill, lang) {
@@ -108,12 +124,12 @@ function showUnlockForm(panel, id, meta, prefill, lang) {
       }
     },
   })
-
   password.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') btn.click()
   })
 
-  panel.replaceChildren(
+  setChildren(
+    panel,
     el('h1', { className: 'panel-title', text: i.unlockTitle }),
     el('p', { className: 'panel-sub', text: meta.burn_after_read ? i.unlockBurn : i.unlockSub }),
     password,
@@ -126,37 +142,77 @@ function showUnlockForm(panel, id, meta, prefill, lang) {
 
 function showContent(panel, plain, meta, lang) {
   const i = t(lang)
-  const trimmed = plain.trim()
-  const isURL = /^https?:\/\/\S+$/i.test(trimmed)
-  const body = isURL
-    ? el('a', {
-        className: 'content-link',
-        href: trimmed,
-        target: '_blank',
-        rel: 'noopener noreferrer',
-        text: trimmed,
-      })
-    : el('pre', { className: 'content-body', text: plain })
+  const kind = meta.kind || 'text'
+  const kids = [el('h1', { className: 'panel-title', text: i.content })]
 
-  const copyBtn = el('button', {
-    type: 'button',
-    className: 'btn primary',
-    text: i.copyContent,
-    onClick: async (e) => {
-      const ok = await copyText(plain)
-      e.target.textContent = ok ? i.copied : i.copyFail
-      setTimeout(() => {
-        e.target.textContent = i.copyContent
-      }, 1600)
-    },
-  })
+  if (kind === 'image' && plain.startsWith('data:image/')) {
+    kids.push(el('img', { className: 'content-image', src: plain, alt: 'shared' }))
+    kids.push(
+      el('a', {
+        className: 'btn primary',
+        href: plain,
+        download: 'neopaste-image',
+        text: i.downloadImage,
+      }),
+    )
+  } else if (kind === 'code') {
+    const pre = el('pre', { className: 'code-block' })
+    const code = el('code', { className: meta.lang ? `language-${meta.lang}` : '' })
+    code.textContent = plain
+    pre.append(code)
+    try {
+      if (meta.lang && meta.lang !== 'plaintext') hljs.highlightElement(code)
+    } catch {
+      /* ignore */
+    }
+    kids.push(el('div', { className: 'content-card' }, [pre]))
+    kids.push(
+      el('button', {
+        type: 'button',
+        className: 'btn primary',
+        text: i.copyContent,
+        onClick: async (e) => {
+          const ok = await copyText(plain)
+          e.target.textContent = ok ? i.copied : i.copyFail
+          setTimeout(() => {
+            e.target.textContent = i.copyContent
+          }, 1600)
+        },
+      }),
+    )
+  } else {
+    const trimmed = plain.trim()
+    const isURL = /^https?:\/\/\S+$/i.test(trimmed)
+    const body = isURL
+      ? el('a', {
+          className: 'content-link',
+          href: trimmed,
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          text: trimmed,
+        })
+      : el('pre', { className: 'content-body', text: plain })
+    kids.push(el('div', { className: 'content-card' }, [body]))
+    kids.push(
+      el('button', {
+        type: 'button',
+        className: 'btn primary',
+        text: i.copyContent,
+        onClick: async (e) => {
+          const ok = await copyText(plain)
+          e.target.textContent = ok ? i.copied : i.copyFail
+          setTimeout(() => {
+            e.target.textContent = i.copyContent
+          }, 1600)
+        },
+      }),
+    )
+  }
 
-  setChildren(
-    panel,
-    el('h1', { className: 'panel-title', text: i.content }),
-    el('div', { className: 'content-card' }, [body]),
-    copyBtn,
-    meta.burn_after_read ? el('p', { className: 'hint', text: i.burned }) : null,
-  )
+  if (meta.burn_after_read || meta.BurnAfterRead) {
+    kids.push(el('p', { className: 'hint', text: i.burned }))
+  }
+
+  setChildren(panel, ...kids)
   animateIn(panel)
 }
