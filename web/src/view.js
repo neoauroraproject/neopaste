@@ -1,5 +1,7 @@
 import { api, el, copyText, animateIn } from './util.js'
 import { decryptPaste, passwordVerify } from './crypto.js'
+import { getLang, setLang, t } from './i18n.js'
+import { langSwitch } from './langswitch.js'
 
 function hashPassword() {
   const h = location.hash.replace(/^#/, '')
@@ -7,57 +9,71 @@ function hashPassword() {
 }
 
 export function renderView(root, { siteName, id }) {
-  const brand = el('header', { className: 'brand compact' }, [
-    el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
-  ])
+  let lang = getLang()
+  setLang(lang)
 
-  const status = el('p', { className: 'status', text: 'در حال بررسی لینک…' })
-  const panel = el('section', { className: 'panel view-panel' }, [status])
-  root.replaceChildren(el('div', { className: 'shell narrow' }, [brand, panel]))
-  animateIn(panel)
+  const mountShell = (panelContent) => {
+    const i = t(lang)
+    const topbar = el('div', { className: 'topbar' }, [
+      el('a', { href: '/', className: 'back-link', text: '← NeoPaste' }),
+      langSwitch(lang, (next) => {
+        lang = next
+        setLang(lang)
+        renderView(root, { siteName, id })
+      }),
+    ])
+    const brand = el('header', { className: 'brand compact' }, [
+      el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
+    ])
+    const panel = el('section', { className: 'panel view-panel' }, panelContent)
+    root.replaceChildren(el('div', { className: 'shell narrow' }, [topbar, brand, panel]))
+    animateIn(panel)
+    return { panel, i }
+  }
+
+  const { panel, i } = mountShell([el('p', { className: 'status', text: t(lang).checking })])
 
   api(`/api/pastes/${encodeURIComponent(id)}`)
     .then(async (meta) => {
       if (meta.locked) {
-        status.classList.add('error')
-        status.textContent = 'این لینک موقتاً قفل شده است. کمی بعد دوباره تلاش کنید.'
+        panel.replaceChildren(el('p', { className: 'status error', text: i.locked }))
         return
       }
       const fromHash = hashPassword()
       if (fromHash) {
         try {
-          await unlockWithPassword(panel, id, meta, fromHash)
+          await unlockWithPassword(panel, id, meta, fromHash, lang)
           return
         } catch {
-          /* fall through to form */
+          /* form */
         }
       }
-      showUnlockForm(panel, id, meta, fromHash)
+      showUnlockForm(panel, id, meta, fromHash, lang)
     })
     .catch((err) => {
-      status.classList.add('error')
-      status.textContent = err.message || 'لینک پیدا نشد'
+      panel.replaceChildren(el('p', { className: 'status error', text: err.message || i.notFound }))
     })
 }
 
-async function unlockWithPassword(panel, id, meta, pass) {
-  if (!meta.salt) throw new Error('اطلاعات لینک ناقص است')
+async function unlockWithPassword(panel, id, meta, pass, lang) {
+  const i = t(lang)
+  if (!meta.salt) throw new Error(i.incomplete)
   const verify = await passwordVerify(pass, meta.salt)
   const payload = await api(`/api/pastes/${encodeURIComponent(id)}/unlock`, {
     method: 'POST',
     body: JSON.stringify({ password_verify: verify }),
   })
   const plain = await decryptPaste(payload, pass)
-  showContent(panel, plain, meta)
+  showContent(panel, plain, meta, lang)
 }
 
-function showUnlockForm(panel, id, meta, prefill = '') {
+function showUnlockForm(panel, id, meta, prefill, lang) {
+  const i = t(lang)
   const password = el('input', {
     className: 'field',
     type: 'password',
-    placeholder: 'رمز عبور',
+    placeholder: i.password,
     autocomplete: 'current-password',
-    value: prefill || undefined,
   })
   if (prefill) password.value = prefill
   const status = el('p', { className: 'status', hidden: true })
@@ -66,29 +82,29 @@ function showUnlockForm(panel, id, meta, prefill = '') {
   const btn = el('button', {
     type: 'button',
     className: 'btn primary',
-    text: 'مشاهده',
+    text: i.view,
     onClick: async () => {
       if (busy) return
       const pass = password.value
       if (!pass) {
         status.hidden = false
         status.classList.add('error')
-        status.textContent = 'رمز را وارد کنید'
+        status.textContent = i.enterPass
         return
       }
       busy = true
       btn.disabled = true
-      btn.textContent = 'در حال باز کردن…'
+      btn.textContent = i.opening
       status.hidden = true
       try {
-        await unlockWithPassword(panel, id, meta, pass)
+        await unlockWithPassword(panel, id, meta, pass, lang)
       } catch (err) {
         status.hidden = false
         status.classList.add('error')
-        status.textContent = err.message || 'رمز اشتباه است'
+        status.textContent = err.message || i.badPass
         busy = false
         btn.disabled = false
-        btn.textContent = 'مشاهده'
+        btn.textContent = i.view
       }
     },
   })
@@ -98,13 +114,8 @@ function showUnlockForm(panel, id, meta, prefill = '') {
   })
 
   panel.replaceChildren(
-    el('h1', { className: 'panel-title', text: 'ورود با رمز' }),
-    el('p', {
-      className: 'panel-sub',
-      text: meta.burn_after_read
-        ? 'این محتوا بعد از اولین مشاهده موفق حذف می‌شود.'
-        : 'محتوا رمزنگاری‌شده است و فقط با رمز صحیح باز می‌شود.',
-    }),
+    el('h1', { className: 'panel-title', text: i.unlockTitle }),
+    el('p', { className: 'panel-sub', text: meta.burn_after_read ? i.unlockBurn : i.unlockSub }),
     password,
     btn,
     status,
@@ -113,7 +124,8 @@ function showUnlockForm(panel, id, meta, prefill = '') {
   password.focus()
 }
 
-function showContent(panel, plain, meta) {
+function showContent(panel, plain, meta, lang) {
+  const i = t(lang)
   const trimmed = plain.trim()
   const isURL = /^https?:\/\/\S+$/i.test(trimmed)
   const body = isURL
@@ -129,23 +141,21 @@ function showContent(panel, plain, meta) {
   const copyBtn = el('button', {
     type: 'button',
     className: 'btn primary',
-    text: 'کپی محتوا',
+    text: i.copyContent,
     onClick: async (e) => {
       const ok = await copyText(plain)
-      e.target.textContent = ok ? 'کپی شد' : 'خطا'
+      e.target.textContent = ok ? i.copied : i.copyFail
       setTimeout(() => {
-        e.target.textContent = 'کپی محتوا'
+        e.target.textContent = i.copyContent
       }, 1600)
     },
   })
 
   panel.replaceChildren(
-    el('h1', { className: 'panel-title', text: 'محتوا' }),
+    el('h1', { className: 'panel-title', text: i.content }),
     el('div', { className: 'content-card' }, [body]),
     copyBtn,
-    meta.burn_after_read
-      ? el('p', { className: 'hint', text: 'این محتوا از سرور حذف شد و دوباره در دسترس نیست.' })
-      : null,
+    meta.burn_after_read ? el('p', { className: 'hint', text: i.burned }) : null,
   )
   animateIn(panel)
 }

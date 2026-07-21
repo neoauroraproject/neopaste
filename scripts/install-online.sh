@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# NeoPaste one-line online installer.
-# Usage:
+# NeoPaste one-line online installer / updater / uninstaller
+#
+# Install or interactive menu:
 #   curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash
-# Non-interactive:
-#   curl -fsSL ... | sudo NEOPASTE_PORT=8080 NEOPASTE_SITE_NAME=MyPaste NEOPASTE_NONINTERACTIVE=1 bash
+#
+# Update existing install:
+#   curl -fsSL .../install-online.sh | sudo bash -s -- --update
+#
+# Uninstall:
+#   curl -fsSL .../install-online.sh | sudo bash -s -- --uninstall
+#
+# Fresh install non-interactive:
+#   curl -fsSL .../install-online.sh | sudo bash -s -- --install --yes
 
 REPO="neoauroraproject/neopaste"
 ASSET="neopaste-linux-amd64.tar.gz"
@@ -13,17 +21,22 @@ TMP_DIR="$(mktemp -d)"
 cleanup() { rm -rf "$TMP_DIR"; }
 trap cleanup EXIT
 
+PASS_ARGS=("$@")
+
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Please run as root, e.g.:" >&2
   echo "  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install-online.sh | sudo bash" >&2
+  echo "  curl -fsSL ... | sudo bash -s -- --update" >&2
+  echo "  curl -fsSL ... | sudo bash -s -- --uninstall" >&2
   exit 1
 fi
 
+# Uninstall does not need a download if local uninstall.sh exists — still download for consistent UX
 ARCH="$(uname -m)"
 case "$ARCH" in
   x86_64|amd64) ASSET="neopaste-linux-amd64.tar.gz" ;;
   aarch64|arm64)
-    echo "ARM64 release asset not published yet. Use offline build: make build-linux-arm64" >&2
+    echo "ARM64 release asset not published yet." >&2
     exit 1
     ;;
   *)
@@ -33,7 +46,7 @@ case "$ARCH" in
 esac
 
 echo "======================================"
-echo "     NeoPaste — Online Install"
+echo "     NeoPaste — Online Setup"
 echo "======================================"
 echo "Downloading latest release…"
 
@@ -62,22 +75,21 @@ else
 fi
 
 chmod +x "${INSTALL_ROOT}/install.sh" 2>/dev/null || true
+chmod +x "${INSTALL_ROOT}/uninstall.sh" 2>/dev/null || true
 chmod +x "${INSTALL_ROOT}/neopaste" 2>/dev/null || true
-chmod +x "${INSTALL_ROOT}/bin/neopaste" 2>/dev/null || true
 
 if [[ ! -f "${INSTALL_ROOT}/neopaste" && ! -f "${INSTALL_ROOT}/bin/neopaste" ]]; then
-  echo "Binary missing from release archive." >&2
-  ls -la "$INSTALL_ROOT" >&2 || true
-  exit 1
+  # uninstall-only still needs install.sh which can uninstall without binary for --uninstall
+  if [[ " ${PASS_ARGS[*]} " != *" --uninstall "* ]]; then
+    echo "Binary missing from release archive." >&2
+    ls -la "$INSTALL_ROOT" >&2 || true
+    exit 1
+  fi
 fi
 
 export NEOPASTE_INSTALL_LABEL="Online Install"
-export NEOPASTE_PORT="${NEOPASTE_PORT:-}"
-export NEOPASTE_SITE_NAME="${NEOPASTE_SITE_NAME:-}"
-export NEOPASTE_NONINTERACTIVE="${NEOPASTE_NONINTERACTIVE:-}"
-
 trap - EXIT
-bash "${INSTALL_ROOT}/install.sh"
+bash "${INSTALL_ROOT}/install.sh" "${PASS_ARGS[@]}"
 STATUS=$?
 cleanup
 exit "$STATUS"

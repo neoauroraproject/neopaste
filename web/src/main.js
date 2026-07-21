@@ -5,6 +5,7 @@ import '@fontsource/vazirmatn/600.css'
 import '@fontsource/vazirmatn/700.css'
 import './styles.css'
 import { api } from './util.js'
+import { applyDocumentLang, getLang } from './i18n.js'
 import { renderHome } from './home.js'
 import { renderView } from './view.js'
 import { renderAdmin } from './admin.js'
@@ -12,12 +13,14 @@ import { renderAdmin } from './admin.js'
 const app = document.getElementById('app')
 
 async function boot() {
+  applyDocumentLang(getLang())
+
   let siteName = 'NeoPaste'
   try {
     const cfg = await api('/api/public-config')
     if (cfg.site_name) siteName = cfg.site_name
   } catch {
-    /* offline / first paint */
+    /* first paint */
   }
   document.title = siteName
 

@@ -4,178 +4,96 @@
 ![Release](https://img.shields.io/github/v/release/neoauroraproject/neopaste?label=release)
 ![License](https://img.shields.io/github/license/neoauroraproject/neopaste)
 
-**Secure self-hosted paste & short links** — end-to-end encrypted in the browser. Password + expiry. Offline-friendly install.
+**Secure self-hosted paste & short links** — end-to-end encrypted in the browser. FA/EN UI. Offline-friendly install & update.
 
-سرویس خودمیزبان برای اشتراک امن متن و لینک با رمز و تایمر. رمزنگاری در مرورگر؛ نصب آسان حتی روی سرور بدون اینترنت بین‌الملل.
+سرویس خودمیزبان برای اشتراک امن متن و لینک. رابط فارسی/انگلیسی. نصب و آپدیت آسان حتی بدون اینترنت روی سرور.
 
 ---
 
 ## English
 
-### One-line install (server has internet)
+### One-line install / update / uninstall
 
 ```bash
+# Interactive (asks: Update / Install / Uninstall if already installed)
 curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash
+
+# Force update (keep data & admin password)
+curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash -s -- --update
+
+# Fresh install
+curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash -s -- --install
+
+# Uninstall
+curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash -s -- --uninstall
 ```
 
-You will be asked for **port** and **site name** (defaults: `8080` / `NeoPaste`). At the end you get the site URL, admin URL, username and password.
+After **update**, hard-refresh the browser: `Ctrl+Shift+R` (old JS may be cached otherwise).
 
-Non-interactive example:
+Non-interactive install:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh \
-  | sudo NEOPASTE_PORT=8080 NEOPASTE_SITE_NAME=MyPaste NEOPASTE_NONINTERACTIVE=1 bash
+  | sudo bash -s -- --install --yes
 ```
 
-### Offline install (no international / no internet on the server)
+### Offline install / update
 
-Do the download on a machine that **has** internet, then copy files to the server (USB, local SCP, etc.). The server never needs to reach GitHub.
-
-1. On a PC with internet, download the latest offline package:
+1. Download on a machine with internet:
 
 ```bash
-# example — replace VERSION with the latest tag, e.g. v1.0.0
 curl -fsSL -o neopaste-linux-amd64.tar.gz \
   https://github.com/neoauroraproject/neopaste/releases/latest/download/neopaste-linux-amd64.tar.gz
 ```
 
-Or open [Releases](https://github.com/neoauroraproject/neopaste/releases) in a browser and download `neopaste-linux-amd64.tar.gz`.
-
-2. Copy the archive to the server (USB / intranet), then:
+2. Copy to the server, then:
 
 ```bash
 tar -xzf neopaste-linux-amd64.tar.gz
 cd neopaste
-sudo bash install.sh
+sudo bash install.sh            # menu: update / install / uninstall
+sudo bash install.sh --update   # update only
+sudo bash install.sh --uninstall
 ```
-
-3. Choose port and site name. The script prints:
-
-```
-URL:        http://SERVER_IP:PORT
-Admin:      http://SERVER_IP:PORT/admin
-Username:   admin
-Password:   ********
-```
-
-No `git clone`, no `apt` of app dependencies, no runtime download on the server.
-
-### Uninstall
-
-```bash
-sudo bash uninstall.sh
-```
-
-### Features
-
-- Client-side E2E encryption (server only stores ciphertext)
-- Short link, password, expiry presets, burn-after-read
-- Expired / burned pastes are deleted from SQLite
-- Admin panel: site name, domain, TLS cert/key paths
-- Single static Go binary + SQLite
 
 ---
 
 ## فارسی
 
-### نصب با یک خط (سرور به اینترنت دسترسی دارد)
+### نصب / آپدیت / حذف با یک خط
 
 ```bash
+# اگر از قبل نصب باشد منو می‌آید: آپدیت / نصب تازه / حذف
 curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash
+
+# فقط آپدیت (دیتا و رمز ادمین حفظ می‌شود)
+curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash -s -- --update
+
+# نصب تازه
+curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash -s -- --install
+
+# حذف
+curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash -s -- --uninstall
 ```
 
-پورت و نام سایت پرسیده می‌شود (پیش‌فرض: `8080` / `NeoPaste`). در پایان آدرس سایت، پنل ادمین، نام کاربری و رمز چاپ می‌شود.
+بعد از آپدیت حتماً مرورگر را سخت‌رفرش کنید: `Ctrl+Shift+R`
 
-نصب بدون پرسش:
+### نصب آفلاین
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh \
-  | sudo NEOPASTE_PORT=8080 NEOPASTE_SITE_NAME=MyPaste NEOPASTE_NONINTERACTIVE=1 bash
-```
-
-### نصب آفلاین (سرور اینترنت بین‌الملل ندارد)
-
-دانلود را روی سیستمی انجام دهید که اینترنت دارد؛ فقط فایل‌ها را به سرور منتقل کنید (فلش، شبکه داخلی، …). سرور نیازی به دسترسی به GitHub ندارد.
-
-1. روی سیستم دارای اینترنت، بسته آفلاین را بگیرید:
-
-```bash
-# نسخه را با تگ آخرین ریلیز عوض کنید، مثلاً v1.0.0
-curl -fsSL -o neopaste-linux-amd64.tar.gz \
-  https://github.com/neoauroraproject/neopaste/releases/latest/download/neopaste-linux-amd64.tar.gz
-```
-
-یا از صفحه [Releases](https://github.com/neoauroraproject/neopaste/releases) فایل `neopaste-linux-amd64.tar.gz` را دانلود کنید.
-
-2. آرشیو را به سرور کپی کنید، سپس:
-
-```bash
-tar -xzf neopaste-linux-amd64.tar.gz
-cd neopaste
-sudo bash install.sh
-```
-
-3. پورت و نام سایت را وارد کنید. خروجی نمونه:
-
-```
-آدرس:        http://IP_سرور:PORT
-ادمین:       http://IP_سرور:PORT/admin
-نام کاربری:  admin
-رمز عبور:    ********
-```
-
-روی سرور نه `git clone` لازم است، نه نصب وابستگی از اینترنت.
-
-### حذف نصب
-
-```bash
-sudo bash uninstall.sh
-```
-
-### امکانات
-
-- رمزنگاری end-to-end در مرورگر (سرور متن خام نمی‌بیند)
-- لینک کوتاه، رمز، تایمر انقضا، حذف بعد از اولین مشاهده
-- حذف واقعی از دیتابیس بعد از انقضا / burn
-- پنل ادمین: نام سایت، دامنه، مسیر گواهی SSL
-- یک باینری Go + SQLite توکار
+دانلود بسته از Releases روی سیستم دارای نت → کپی به سرور → `sudo bash install.sh` (منوی آپدیت/نصب/حذف).
 
 ---
 
-## Build from source / ساخت از سورس
+## Features
 
-Requires Go 1.22+ and Node.js 18+.
+- Client-side E2E encryption (works on HTTP too)
+- Password / expiry / burn-after-read toggles
+- Persian & English UI
+- Admin: site name, domain, TLS paths
+- Single Go binary + SQLite
+
+## Build from source
 
 ```bash
 make package
-# → dist/neopaste/  (binary + install.sh)
 ```
-
-Local run:
-
-```bash
-cd web && npm install && npm run build && cd ..
-go run ./cmd/neopaste -listen :8080 -data ./data
-```
-
----
-
-## Security notes / نکات امنیتی
-
-- Decryption key never leaves the browser
-- Rate-limited unlock attempts
-- Admin password hashed with bcrypt
-- Optional TLS via admin panel (cert/key paths on disk)
-
-
-## 💖 Donation (حمایت مالی)
-
-If you find this project helpful and want to support its development, you can donate us via:
-اگر این پروژه برای شما مفید بوده و تمایل به حمایت از توسعهی آن دارید، میتوانید از طریق زیر از ما حمایت کنید:
-
-* **USDT (BEP20):**
-  `0xacA935a5955a756BedaE4738304274EdeE0223D5`
-
----
-Telegram Channels:  [NeoAurora](https://t.me/neoaurora) / [HMray](https://t.me/hmpanel)
-*Built with ❤️ for Freedom.*

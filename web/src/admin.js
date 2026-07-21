@@ -1,29 +1,47 @@
 import { api, el, animateIn } from './util.js'
+import { getLang, setLang, t } from './i18n.js'
+import { langSwitch } from './langswitch.js'
 
 export function renderAdmin(root, { siteName }) {
-  const brand = el('header', { className: 'brand compact' }, [
-    el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
-  ])
+  let lang = getLang()
+  setLang(lang)
+
+  const frame = (panelNode) => {
+    const topbar = el('div', { className: 'topbar' }, [
+      el('a', { href: '/', className: 'back-link', text: '← NeoPaste' }),
+      langSwitch(lang, (next) => {
+        lang = next
+        setLang(lang)
+        renderAdmin(root, { siteName })
+      }),
+    ])
+    const brand = el('header', { className: 'brand compact' }, [
+      el('span', { className: 'brand-name', text: siteName || 'NeoPaste' }),
+    ])
+    root.replaceChildren(el('div', { className: 'shell narrow' }, [topbar, brand, panelNode]))
+  }
+
   const panel = el('section', { className: 'panel admin-panel' }, [
-    el('p', { className: 'status', text: 'در حال بارگذاری…' }),
+    el('p', { className: 'status', text: t(lang).adminLoading }),
   ])
-  root.replaceChildren(el('div', { className: 'shell narrow' }, [brand, panel]))
+  frame(panel)
 
   api('/api/admin/me')
-    .then(() => showSettings(panel))
-    .catch(() => showLogin(panel))
+    .then(() => showSettings(panel, lang, () => renderAdmin(root, { siteName })))
+    .catch(() => showLogin(panel, lang, () => renderAdmin(root, { siteName })))
 }
 
-function showLogin(panel) {
-  const user = el('input', { className: 'field', type: 'text', placeholder: 'نام کاربری', autocomplete: 'username' })
-  const pass = el('input', { className: 'field', type: 'password', placeholder: 'رمز عبور', autocomplete: 'current-password' })
+function showLogin(panel, lang, rerender) {
+  const i = t(lang)
+  const user = el('input', { className: 'field', type: 'text', placeholder: i.username, autocomplete: 'username' })
+  const pass = el('input', { className: 'field', type: 'password', placeholder: i.password, autocomplete: 'current-password' })
   const status = el('p', { className: 'status', hidden: true })
   let busy = false
 
   const btn = el('button', {
     type: 'button',
     className: 'btn primary',
-    text: 'ورود',
+    text: i.login,
     onClick: async () => {
       if (busy) return
       busy = true
@@ -34,11 +52,11 @@ function showLogin(panel) {
           method: 'POST',
           body: JSON.stringify({ username: user.value.trim(), password: pass.value }),
         })
-        showSettings(panel)
+        showSettings(panel, lang, rerender)
       } catch (err) {
         status.hidden = false
         status.classList.add('error')
-        status.textContent = err.message || 'ورود ناموفق'
+        status.textContent = err.message || i.loginFail
         busy = false
         btn.disabled = false
       }
@@ -50,7 +68,8 @@ function showLogin(panel) {
   })
 
   panel.replaceChildren(
-    el('h1', { className: 'panel-title', text: 'ورود ادمین' }),
+    el('h1', { className: 'panel-title', text: i.adminLogin }),
+    el('p', { className: 'panel-sub', text: 'NeoPaste' }),
     user,
     pass,
     btn,
@@ -60,8 +79,9 @@ function showLogin(panel) {
   user.focus()
 }
 
-async function showSettings(panel) {
-  panel.replaceChildren(el('p', { className: 'status', text: 'بارگذاری تنظیمات…' }))
+async function showSettings(panel, lang, rerender) {
+  const i = t(lang)
+  panel.replaceChildren(el('p', { className: 'status', text: i.loadingSettings }))
   let st
   try {
     st = await api('/api/admin/settings')
@@ -74,14 +94,29 @@ async function showSettings(panel) {
   const domain = el('input', { className: 'field', type: 'text', value: st.domain || '', placeholder: 'example.com' })
   const cert = el('input', { className: 'field mono', type: 'text', value: st.cert_path || '', placeholder: '/path/to/fullchain.pem' })
   const key = el('input', { className: 'field mono', type: 'text', value: st.key_path || '', placeholder: '/path/to/privkey.pem' })
-  const tls = el('input', { type: 'checkbox' })
-  tls.checked = !!st.tls_enabled
+
+  const tlsCheck = el('input', { type: 'checkbox', className: 'opt-check' })
+  tlsCheck.checked = !!st.tls_enabled
+  const tlsRow = el('div', { className: 'opt-row' + (st.tls_enabled ? ' on' : '') }, [
+    el('label', { className: 'opt-head' }, [
+      tlsCheck,
+      el('span', { className: 'opt-switch', 'aria-hidden': 'true' }),
+      el('span', { className: 'opt-text' }, [
+        el('strong', { className: 'opt-title', text: i.enableTls }),
+        el('span', { className: 'opt-hint', text: 'TLS' }),
+      ]),
+    ]),
+  ])
+  tlsCheck.addEventListener('change', () => {
+    tlsRow.classList.toggle('on', tlsCheck.checked)
+  })
+
   const status = el('p', { className: 'status', hidden: true })
 
   const save = el('button', {
     type: 'button',
     className: 'btn primary',
-    text: 'ذخیره',
+    text: i.save,
     onClick: async () => {
       save.disabled = true
       status.hidden = true
@@ -91,19 +126,19 @@ async function showSettings(panel) {
           body: JSON.stringify({
             site_name: siteName.value.trim(),
             domain: domain.value.trim(),
-            tls_enabled: tls.checked,
+            tls_enabled: tlsCheck.checked,
             cert_path: cert.value.trim(),
             key_path: key.value.trim(),
           }),
         })
         status.hidden = false
         status.classList.remove('error')
-        status.textContent = 'ذخیره شد. برای تغییر حالت HTTP/HTTPS ممکن است نیاز به ری‌استارت سرویس باشد.'
+        status.textContent = i.saved
         document.title = siteName.value.trim() || 'NeoPaste'
       } catch (err) {
         status.hidden = false
         status.classList.add('error')
-        status.textContent = err.message || 'ذخیره ناموفق'
+        status.textContent = err.message || i.saveFail
       } finally {
         save.disabled = false
       }
@@ -113,24 +148,26 @@ async function showSettings(panel) {
   const logout = el('button', {
     type: 'button',
     className: 'btn ghost',
-    text: 'خروج',
+    text: i.logout,
     onClick: async () => {
       await api('/api/admin/logout', { method: 'POST', body: '{}' })
-      showLogin(panel)
+      showLogin(panel, lang, rerender)
     },
   })
 
   panel.replaceChildren(
-    el('h1', { className: 'panel-title', text: 'تنظیمات' }),
-    el('label', { className: 'field-label', text: 'نام سایت' }),
-    siteName,
-    el('label', { className: 'field-label', text: 'دامنه (اختیاری)' }),
-    domain,
-    el('label', { className: 'toggle' }, [tls, el('span', { text: 'فعال‌سازی SSL / TLS' })]),
-    el('label', { className: 'field-label', text: 'مسیر گواهی (cert)' }),
-    cert,
-    el('label', { className: 'field-label', text: 'مسیر کلید (key)' }),
-    key,
+    el('h1', { className: 'panel-title', text: i.settings }),
+    el('div', { className: 'admin-grid' }, [
+      el('label', { className: 'field-label', text: i.siteName }),
+      siteName,
+      el('label', { className: 'field-label', text: i.domain }),
+      domain,
+      tlsRow,
+      el('label', { className: 'field-label', text: i.certPath }),
+      cert,
+      el('label', { className: 'field-label', text: i.keyPath }),
+      key,
+    ]),
     el('div', { className: 'btn-row' }, [save, logout]),
     status,
   )
