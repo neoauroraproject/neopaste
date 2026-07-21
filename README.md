@@ -152,3 +152,16 @@ go run ./cmd/neopaste -listen :8080 -data ./data
 - Rate-limited unlock attempts
 - Admin password hashed with bcrypt
 - Optional TLS via admin panel (cert/key paths on disk)
+
+
+## 💖 Donation (حمایت مالی)
+
+If you find this project helpful and want to support its development, you can donate us via:
+اگر این پروژه برای شما مفید بوده و تمایل به حمایت از توسعهی آن دارید، میتوانید از طریق زیر از ما حمایت کنید:
+
+* **USDT (BEP20):**
+  `0xacA935a5955a756BedaE4738304274EdeE0223D5`
+
+---
+Telegram Channels:  [NeoAurora](https://t.me/neoaurora) / [HMPanel](https://t.me/hmpanel)
+*Built with ❤️ for the 3x-ui community.*
