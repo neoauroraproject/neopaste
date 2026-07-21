@@ -49,6 +49,17 @@ export function topBar(lang, onLang, extraStart) {
   ])
 }
 
+/** Shared floating nav used by home + tools. */
+export function appNav({ siteName, lang, onLang, endExtra }) {
+  return el('header', { className: 'home-nav' }, [
+    el('a', { href: '/', className: 'nav-brand' }, [
+      el('span', { className: 'nav-mark', 'aria-hidden': 'true' }),
+      el('span', { className: 'nav-name', text: siteName || 'NeoPaste' }),
+    ]),
+    el('div', { className: 'home-nav-end' }, [endExtra, langSwitch(lang, onLang)].filter(Boolean)),
+  ])
+}
+
 export function securityOptions(lang, state) {
   const i = t(lang)
   const password = el('input', {
@@ -99,13 +110,17 @@ export function securityOptions(lang, state) {
     },
   })
 
-  const body = el('div', { className: 'options' }, [passOpt.row, expiryOpt.row, burnOpt.row])
-  const fold = el('details', { className: 'options-fold' }, [
-    el('summary', { className: 'options-summary', text: i.securityOpts }),
-    body,
+  const node = el('section', { className: 'security-panel', 'aria-label': i.securityOpts }, [
+    el('div', { className: 'security-head' }, [
+      el('div', { className: 'security-titles' }, [
+        el('strong', { className: 'security-title', text: i.securityOpts }),
+        el('span', { className: 'security-hint', text: i.securityHint }),
+      ]),
+    ]),
+    el('div', { className: 'options' }, [passOpt.row, expiryOpt.row, burnOpt.row]),
   ])
   return {
-    node: fold,
+    node,
     password,
     state,
   }

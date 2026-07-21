@@ -6,11 +6,11 @@ import {
   showResultPage,
   securityOptions,
   EXPIRY,
+  appNav,
 } from './share.js'
 import { TEMPLATES } from './templates.js'
 import { compressImage } from './image.js'
 import { renderTools } from './tools.js'
-import { langSwitch } from './langswitch.js'
 import { icon, iconLabel } from './icons.js'
 
 const CODE_LANGS = [
@@ -86,7 +86,7 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
 
     const langSelect = el(
       'select',
-      { className: 'field field-compact', 'aria-label': i.language },
+      { className: 'field select-field', 'aria-label': i.language },
       CODE_LANGS.map((l) =>
         el('option', {
           value: l.id,
@@ -99,10 +99,11 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
     langSelect.addEventListener('change', () => {
       draft.codeLang = langSelect.value
     })
+    const langSelectWrap = el('div', { className: 'select-wrap field-compact' }, [langSelect])
 
     const tplRow = el(
       'div',
-      { className: 'tpl-row', hidden: !showTemplates },
+      { className: 'tpl-row' },
       TEMPLATES.map((tpl) =>
         el('button', {
           type: 'button',
@@ -117,16 +118,23 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
       ),
     )
 
+    const tplPanel = el('div', {
+      className: 'tpl-panel' + (showTemplates ? ' open' : ''),
+    })
     const tplToggle = el('button', {
       type: 'button',
-      className: 'linkish-btn',
-      text: showTemplates ? i.hideTemplates : i.templates,
+      className: 'tpl-toggle',
+      'aria-expanded': showTemplates ? 'true' : 'false',
       onClick: () => {
         showTemplates = !showTemplates
-        tplRow.hidden = !showTemplates
-        tplToggle.textContent = showTemplates ? i.hideTemplates : i.templates
+        tplPanel.classList.toggle('open', showTemplates)
+        tplToggle.setAttribute('aria-expanded', showTemplates ? 'true' : 'false')
+        tplToggleLabel.textContent = showTemplates ? i.hideTemplates : i.showTemplates
       },
     })
+    const tplToggleLabel = el('span', { text: showTemplates ? i.hideTemplates : i.showTemplates })
+    tplToggle.append(icon('chevron', 'ico tpl-chevron'), tplToggleLabel)
+    tplPanel.append(tplToggle, tplRow)
 
     const imgPreview = el('img', { className: 'img-preview', hidden: true, alt: i.imagePreview })
     const imgMeta = el('p', { className: 'hint', hidden: true })
@@ -305,16 +313,12 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
       composeBody = el('div', { className: 'compose-body' }, [
         el('div', { className: 'compose-toolbar' }, [
           el('label', { className: 'field-label', text: i.language }),
-          langSelect,
+          langSelectWrap,
         ]),
         content,
       ])
     } else {
-      composeBody = el('div', { className: 'compose-body' }, [
-        el('div', { className: 'compose-meta' }, [tplToggle]),
-        tplRow,
-        content,
-      ])
+      composeBody = el('div', { className: 'compose-body' }, [tplPanel, content])
     }
 
     const form = el('section', { className: 'panel create-panel home-panel', 'aria-label': i.create }, [
@@ -344,25 +348,16 @@ export function renderHome(root, { siteName, toolsEnabled = true }) {
 
     const historySection = await buildHistory(lang, i)
 
-    const navEnd = el('div', { className: 'home-nav-end' }, [
-      toolsEnabled
-        ? el('a', { href: '/tools', className: 'nav-chip' }, [
-            icon('tools'),
-            el('span', { text: i.tabTools }),
-          ])
-        : null,
-      langSwitch(lang, onLang),
-    ].filter(Boolean))
+    const navEndExtra = toolsEnabled
+      ? el('a', { href: '/tools', className: 'nav-chip' }, [
+          icon('tools'),
+          el('span', { text: i.tabTools }),
+        ])
+      : null
 
     root.replaceChildren(
       el('div', { className: 'home-page page-slide' }, [
-        el('header', { className: 'home-nav' }, [
-          el('a', { href: '/', className: 'nav-brand' }, [
-            el('span', { className: 'nav-mark', 'aria-hidden': 'true' }),
-            el('span', { className: 'nav-name', text: siteName || 'NeoPaste' }),
-          ]),
-          navEnd,
-        ]),
+        appNav({ siteName, lang, onLang, endExtra: navEndExtra }),
         el('section', { className: 'home-hero' }, [
           el('h1', { className: 'hero-title', text: siteName || 'NeoPaste' }),
           el('p', { className: 'hero-sub', text: i.taglineShort }),

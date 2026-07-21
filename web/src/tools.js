@@ -1,8 +1,9 @@
 import { sha256, sha512 } from '@noble/hashes/sha2.js'
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js'
-import { el, copyText } from './util.js'
+import { el, copyText, animateIn } from './util.js'
 import { t } from './i18n.js'
-import { createSecureShare, showResultPage, securityOptions, EXPIRY, topBar } from './share.js'
+import { createSecureShare, showResultPage, securityOptions, EXPIRY, appNav } from './share.js'
+import { icon } from './icons.js'
 
 function toHex(str) {
   return bytesToHex(new TextEncoder().encode(str))
@@ -122,9 +123,19 @@ export function renderTools(root, { siteName, lang, onLang, toolsEnabled }) {
   const i = t(lang)
   if (!toolsEnabled) {
     root.replaceChildren(
-      el('div', { className: 'shell narrow' }, [
-        topBar(lang, onLang, el('a', { href: '/', className: 'back-link', text: '← NeoPaste' })),
-        el('section', { className: 'panel' }, [el('p', { className: 'status', text: i.toolsDisabled })]),
+      el('div', { className: 'home-page page-slide' }, [
+        appNav({
+          siteName,
+          lang,
+          onLang,
+          endExtra: el('a', { href: '/', className: 'nav-chip' }, [
+            icon('link'),
+            el('span', { text: 'Home' }),
+          ]),
+        }),
+        el('section', { className: 'panel home-panel' }, [
+          el('p', { className: 'status', text: i.toolsDisabled }),
+        ]),
       ]),
     )
     return
@@ -134,7 +145,7 @@ export function renderTools(root, { siteName, lang, onLang, toolsEnabled }) {
   const lastOut = { value: '' }
   const shareState = { usePassword: true, useExpiry: true, expiresIn: EXPIRY[2].sec, burn: false }
 
-  const panel = el('section', { className: 'panel tools-panel' })
+  const panel = el('section', { className: 'panel home-panel tools-panel' })
   const mount = () => {
     const tabs = segment(
       [
@@ -166,15 +177,24 @@ export function renderTools(root, { siteName, lang, onLang, toolsEnabled }) {
   mount()
 
   root.replaceChildren(
-    el('div', { className: 'shell narrow page-slide' }, [
-      topBar(lang, onLang, el('a', { href: '/', className: 'back-link', text: '← NeoPaste' })),
-      el('header', { className: 'brand compact' }, [
-        el('a', { href: '/', className: 'brand-name', text: siteName || 'NeoPaste' }),
-        el('p', { className: 'brand-tag soft', text: i.toolsTitleShort }),
+    el('div', { className: 'home-page page-slide tools-page' }, [
+      appNav({
+        siteName,
+        lang,
+        onLang,
+        endExtra: el('a', { href: '/', className: 'nav-chip' }, [
+          icon('paste'),
+          el('span', { text: i.tabPaste }),
+        ]),
+      }),
+      el('section', { className: 'home-hero' }, [
+        el('h1', { className: 'hero-title', text: i.toolsTitleShort }),
+        el('p', { className: 'hero-sub', text: i.toolsTitle }),
       ]),
-      panel,
+      el('div', { className: 'tools-stage' }, [panel]),
     ]),
   )
+  animateIn(panel)
 }
 
 function encodePane(lang, i, lastOut) {

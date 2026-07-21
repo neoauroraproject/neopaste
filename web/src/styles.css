@@ -633,7 +633,7 @@ body::before {
   justify-content: space-between;
   gap: 0.75rem;
   min-height: var(--nav-h);
-  padding: 0.45rem 0.65rem 0.45rem 0.85rem;
+  padding: 0.5rem 1rem;
   border-radius: 999px;
   border: 1px solid var(--line);
   background: rgba(12, 18, 26, 0.72);
@@ -648,7 +648,7 @@ body::before {
   text-decoration: none;
   color: var(--ink);
   min-height: 44px;
-  padding-inline-end: 0.35rem;
+  padding-inline: 0.35rem 0.5rem;
 }
 
 .nav-mark {
@@ -1031,7 +1031,148 @@ body::before {
 }
 
 .field-compact {
-  max-width: 11rem;
+  max-width: 14rem;
+  width: 100%;
+}
+
+.select-wrap {
+  position: relative;
+  display: block;
+}
+
+.select-wrap::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  inset-inline-end: 0.95rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-inline-end: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: translateY(-65%) rotate(45deg);
+  pointer-events: none;
+}
+
+select.field,
+.select-field {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-inline-end: 2.4rem;
+  cursor: pointer;
+  background-image: none;
+  background-color: rgba(8, 12, 16, 0.55);
+  border-radius: 12px;
+  min-height: 46px;
+}
+
+select.field:hover,
+.select-field:hover {
+  border-color: rgba(45, 212, 191, 0.35);
+}
+
+select.field option,
+.select-field option {
+  background: #121820;
+  color: var(--ink);
+}
+
+.security-panel {
+  border: 1px solid rgba(45, 212, 191, 0.28);
+  border-radius: 16px;
+  background: linear-gradient(165deg, rgba(45, 212, 191, 0.08), rgba(0, 0, 0, 0.22));
+  padding: 0.85rem 0.9rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.security-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.security-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.security-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.security-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.security-panel .options {
+  gap: 0.5rem;
+}
+
+.tpl-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.tpl-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.tpl-toggle:hover {
+  color: var(--ink);
+  border-color: rgba(45, 212, 191, 0.35);
+  background: var(--accent-dim);
+}
+
+.tpl-chevron {
+  width: 0.95rem;
+  height: 0.95rem;
+  transition: transform 0.2s var(--ease);
+}
+
+.tpl-panel.open .tpl-chevron {
+  transform: rotate(180deg);
+}
+
+.tpl-row {
+  display: none;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.tpl-panel.open .tpl-row {
+  display: flex;
+}
+
+.tools-page .tools-stage {
+  width: min(760px, 100%);
+  margin: 0 auto;
+}
+
+.tools-panel .seg {
+  margin-bottom: 0.15rem;
 }
 
 .options-fold {
@@ -1068,7 +1209,7 @@ body::before {
   gap: 0.45rem;
 }
 
-.tpl-row {
+.tpl-row-legacy {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
@@ -1317,7 +1458,7 @@ body::before {
 
   .home-nav {
     top: 0.5rem;
-    padding: 0.35rem 0.45rem 0.35rem 0.7rem;
+    padding: 0.4rem 0.85rem;
   }
 
   .home-panel {
