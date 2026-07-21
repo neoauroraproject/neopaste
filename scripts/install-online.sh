@@ -2,8 +2,10 @@
 set -euo pipefail
 
 # NeoPaste one-line online installer.
-# Downloads the latest release asset, then runs the offline install.sh.
-# Usage: curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash
+# Non-interactive:
+#   curl -fsSL ... | sudo NEOPASTE_PORT=8080 NEOPASTE_SITE_NAME=MyPaste NEOPASTE_NONINTERACTIVE=1 bash
 
 REPO="neoauroraproject/neopaste"
 ASSET="neopaste-linux-amd64.tar.gz"
@@ -12,7 +14,8 @@ cleanup() { rm -rf "$TMP_DIR"; }
 trap cleanup EXIT
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "Please run as root: curl -fsSL ... | sudo bash" >&2
+  echo "Please run as root, e.g.:" >&2
+  echo "  curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install-online.sh | sudo bash" >&2
   exit 1
 fi
 
@@ -29,17 +32,22 @@ case "$ARCH" in
     ;;
 esac
 
-echo "Fetching latest NeoPaste release…"
+echo "======================================"
+echo "     NeoPaste — نصب آنلاین"
+echo "======================================"
+echo "Downloading latest release…"
+
 URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
 if command -v curl >/dev/null 2>&1; then
-  curl -fsSL -o "${TMP_DIR}/${ASSET}" "$URL"
+  curl -fL --progress-bar -o "${TMP_DIR}/${ASSET}" "$URL"
 elif command -v wget >/dev/null 2>&1; then
-  wget -q -O "${TMP_DIR}/${ASSET}" "$URL"
+  wget -O "${TMP_DIR}/${ASSET}" "$URL"
 else
   echo "curl or wget required" >&2
   exit 1
 fi
 
+echo "Extracting…"
 tar -xzf "${TMP_DIR}/${ASSET}" -C "$TMP_DIR"
 
 INSTALL_ROOT=""
@@ -63,7 +71,12 @@ if [[ ! -f "${INSTALL_ROOT}/neopaste" && ! -f "${INSTALL_ROOT}/bin/neopaste" ]];
   exit 1
 fi
 
-# Clear EXIT trap so temp files stay until install.sh finishes copying them
+export NEOPASTE_INSTALL_LABEL="نصب آنلاین"
+# Keep env overrides for port/name if the user set them
+export NEOPASTE_PORT="${NEOPASTE_PORT:-}"
+export NEOPASTE_SITE_NAME="${NEOPASTE_SITE_NAME:-}"
+export NEOPASTE_NONINTERACTIVE="${NEOPASTE_NONINTERACTIVE:-}"
+
 trap - EXIT
 bash "${INSTALL_ROOT}/install.sh"
 STATUS=$?

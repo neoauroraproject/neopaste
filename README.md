@@ -18,7 +18,14 @@
 curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash
 ```
 
-This downloads the latest release binary and runs the interactive installer (port + site name). At the end you get the site URL, admin URL, username and password.
+You will be asked for **port** and **site name** (defaults: `8080` / `NeoPaste`). At the end you get the site URL, admin URL, username and password.
+
+Non-interactive example:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh \
+  | sudo NEOPASTE_PORT=8080 NEOPASTE_SITE_NAME=MyPaste NEOPASTE_NONINTERACTIVE=1 bash
+```
 
 ### Offline install (no international / no internet on the server)
 
@@ -77,7 +84,14 @@ sudo bash uninstall.sh
 curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh | sudo bash
 ```
 
-آخرین نسخه از GitHub دانلود و نصب تعاملی اجرا می‌شود (پورت و نام سایت). در پایان آدرس سایت، پنل ادمین، نام کاربری و رمز چاپ می‌شود.
+پورت و نام سایت پرسیده می‌شود (پیش‌فرض: `8080` / `NeoPaste`). در پایان آدرس سایت، پنل ادمین، نام کاربری و رمز چاپ می‌شود.
+
+نصب بدون پرسش:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/neoauroraproject/neopaste/main/scripts/install-online.sh \
+  | sudo NEOPASTE_PORT=8080 NEOPASTE_SITE_NAME=MyPaste NEOPASTE_NONINTERACTIVE=1 bash
+```
 
 ### نصب آفلاین (سرور اینترنت بین‌الملل ندارد)
 
