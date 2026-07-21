@@ -9,14 +9,17 @@ INSTALL_DIR="/opt/neopaste"
 SERVICE_NAME="neopaste"
 BINARY_SRC=""
 
-if [[ -x "${SCRIPT_DIR}/neopaste" ]]; then
+if [[ -f "${SCRIPT_DIR}/neopaste" ]]; then
   BINARY_SRC="${SCRIPT_DIR}/neopaste"
-elif [[ -x "${SCRIPT_DIR}/bin/neopaste" ]]; then
+elif [[ -f "${SCRIPT_DIR}/bin/neopaste" ]]; then
   BINARY_SRC="${SCRIPT_DIR}/bin/neopaste"
 else
   echo "خطا: باینری neopaste در کنار اسکریپت پیدا نشد." >&2
+  echo "مسیر بررسی‌شده: ${SCRIPT_DIR}" >&2
+  ls -la "${SCRIPT_DIR}" >&2 || true
   exit 1
 fi
+chmod +x "$BINARY_SRC"
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "لطفاً با دسترسی root اجرا کنید: sudo bash install.sh" >&2

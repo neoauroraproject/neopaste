@@ -8,7 +8,8 @@ set -euo pipefail
 REPO="neoauroraproject/neopaste"
 ASSET="neopaste-linux-amd64.tar.gz"
 TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
+cleanup() { rm -rf "$TMP_DIR"; }
+trap cleanup EXIT
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Please run as root: curl -fsSL ... | sudo bash" >&2
@@ -29,15 +30,10 @@ case "$ARCH" in
 esac
 
 echo "Fetching latest NeoPaste release…"
-API="https://api.github.com/repos/${REPO}/releases/latest"
+URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
 if command -v curl >/dev/null 2>&1; then
-  URL="$(curl -fsSL "$API" | sed -n "s/.*\"browser_download_url\": \"\\([^\"]*${ASSET}\\)\".*/\\1/p" | head -n1)"
-  if [[ -z "$URL" ]]; then
-    URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
-  fi
   curl -fsSL -o "${TMP_DIR}/${ASSET}" "$URL"
 elif command -v wget >/dev/null 2>&1; then
-  URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
   wget -q -O "${TMP_DIR}/${ASSET}" "$URL"
 else
   echo "curl or wget required" >&2
@@ -45,15 +41,31 @@ else
 fi
 
 tar -xzf "${TMP_DIR}/${ASSET}" -C "$TMP_DIR"
-cd "$TMP_DIR"
-# tarball may contain a top-level neopaste/ directory
-if [[ -d neopaste ]]; then
-  cd neopaste
-elif [[ -x ./install.sh ]]; then
-  :
+
+INSTALL_ROOT=""
+if [[ -d "${TMP_DIR}/neopaste" ]]; then
+  INSTALL_ROOT="${TMP_DIR}/neopaste"
+elif [[ -f "${TMP_DIR}/install.sh" ]]; then
+  INSTALL_ROOT="$TMP_DIR"
 else
-  echo "Unexpected archive layout" >&2
+  echo "Unexpected archive layout:" >&2
+  find "$TMP_DIR" -maxdepth 2 -type f >&2 || true
   exit 1
 fi
 
-exec bash ./install.sh
+chmod +x "${INSTALL_ROOT}/install.sh" 2>/dev/null || true
+chmod +x "${INSTALL_ROOT}/neopaste" 2>/dev/null || true
+chmod +x "${INSTALL_ROOT}/bin/neopaste" 2>/dev/null || true
+
+if [[ ! -f "${INSTALL_ROOT}/neopaste" && ! -f "${INSTALL_ROOT}/bin/neopaste" ]]; then
+  echo "Binary missing from release archive." >&2
+  ls -la "$INSTALL_ROOT" >&2 || true
+  exit 1
+fi
+
+# Clear EXIT trap so temp files stay until install.sh finishes copying them
+trap - EXIT
+bash "${INSTALL_ROOT}/install.sh"
+STATUS=$?
+cleanup
+exit "$STATUS"
