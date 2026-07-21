@@ -33,7 +33,7 @@ case "$ARCH" in
 esac
 
 echo "======================================"
-echo "     NeoPaste — نصب آنلاین"
+echo "     NeoPaste — Online Install"
 echo "======================================"
 echo "Downloading latest release…"
 
@@ -71,8 +71,7 @@ if [[ ! -f "${INSTALL_ROOT}/neopaste" && ! -f "${INSTALL_ROOT}/bin/neopaste" ]];
   exit 1
 fi
 
-export NEOPASTE_INSTALL_LABEL="نصب آنلاین"
-# Keep env overrides for port/name if the user set them
+export NEOPASTE_INSTALL_LABEL="Online Install"
 export NEOPASTE_PORT="${NEOPASTE_PORT:-}"
 export NEOPASTE_SITE_NAME="${NEOPASTE_SITE_NAME:-}"
 export NEOPASTE_NONINTERACTIVE="${NEOPASTE_NONINTERACTIVE:-}"
